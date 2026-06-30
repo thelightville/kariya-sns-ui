@@ -1,0 +1,31 @@
+{
+  "name": "kariya-sns-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "K-SNS dedicated operator UI for SOC dashboard, incidents, cases, policy, and KIF connector visibility.",
+  "scripts": {
+    "dev": "next dev --port 3004",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc --noEmit",
+    "test:boundary": "node scripts/verify-boundary.mjs",
+    "test:c009-staging": "node scripts/verify-c009-staging.mjs",
+    "test:c009-staging:optional": "node scripts/verify-c009-staging.mjs --optional"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "next": "^14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.12",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2"
+  }
+}
