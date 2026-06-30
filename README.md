@@ -15,7 +15,8 @@ enforcement.
 - Target domains: `sns.kariya.ca` and `sns.kariya.ng`.
 - Operator-first workspace with dashboard, incidents, cases, policy, and
   connectors views.
-- Static typed preview data during bootstrap only.
+- Static typed preview data during bootstrap, routed through a single data
+  loading module for later facade replacement.
 - Browser API access constrained to the same-origin `/platform/c009` facade.
 
 ## Commands
@@ -24,8 +25,15 @@ enforcement.
 npm install
 npm run lint
 npm run test:boundary
+npm run test:c009-staging:optional
 npm run build
 ```
+
+`npm run test:c009-staging` is an opt-in staging check. It requires
+`KARIYA_SNS_UI_C009_ORIGIN` and a comma-separated
+`KARIYA_SNS_UI_C009_ENDPOINTS` list. Each endpoint must be an approved
+same-origin `/platform/c009/...` route; the script rejects absolute upstream
+URLs and response payloads containing internal-only fields.
 
 ## Boundary Rules
 

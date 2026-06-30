@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
-    "test:boundary": "node scripts/verify-boundary.mjs"
+    "test:boundary": "node scripts/verify-boundary.mjs",
+    "test:c009-staging": "node scripts/verify-c009-staging.mjs",
+    "test:c009-staging:optional": "node scripts/verify-c009-staging.mjs --optional"
   },
   "dependencies": {
     "clsx": "^2.1.1",

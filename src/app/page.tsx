@@ -1,19 +1,20 @@
 import { AppShell } from '@/components/AppShell'
+import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { Header } from '@/components/Header'
 import { MetricCard } from '@/components/MetricCard'
 import { IncidentTable } from '@/components/Tables'
-import { incidents, socMetrics } from '@/lib/data'
+import { getDashboardData } from '@/lib/portalData'
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { source, metrics, incidents } = await getDashboardData()
+
   return (
     <AppShell active="/">
       <Header title="SOC Dashboard" eyebrow="K-SNS dedicated UI">
-        <div className="rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-panel">
-          Bootstrap preview - static typed data
-        </div>
+        <DataSourceBadge source={source} />
       </Header>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {socMetrics.map((metric) => (
+        {metrics.map((metric) => (
           <MetricCard key={metric.label} metric={metric} />
         ))}
       </section>
