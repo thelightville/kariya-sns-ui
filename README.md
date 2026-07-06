@@ -1,9 +1,9 @@
 # K-SNS UI (kariya-sns-ui)
 
-> **Component:** K-SNS SOC Operations UI  
-> **Part of:** Kariya Security Nervous System (K-SNS)  
-> **Framework:** Next.js 14 (App Router) + React 18 + TypeScript  
-> **Status:** Alpha 1 UI/Console/KIF visibility pass  
+> **Component:** K-SNS SOC Operations UI
+> **Part of:** Kariya Security Nervous System (K-SNS)
+> **Framework:** Next.js 14 (App Router) + React 18 + TypeScript
+> **Status:** Alpha 1 UI/Console/KIF visibility pass
 > **License:** AGPL-3.0 (open core) | Proprietary (Enterprise tier)
 
 ## Purpose
