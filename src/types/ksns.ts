@@ -83,6 +83,11 @@ export interface KsnsIncident {
   opened_at: string;
   created_at?: string;
   updated_at?: string;
+  decisions?: KsnsLifecycleDecision[];
+  actions?: KsnsAction[];
+  verifications?: KsnsVerification[];
+  residual_risk_records?: KsnsResidualRisk[];
+  timeline?: KsnsTimelineEntry[];
 }
 
 export interface KsnsRecommendation {
@@ -153,14 +158,7 @@ export interface KsnsAction {
   action_type: string;
   target: string;
   target_entity_id?: string;
-  enforcement_surface:
-    | "KES"
-    | "KEA"
-    | "connector"
-    | "cloud"
-    | "identity"
-    | "manual"
-    | "unknown";
+  enforcement_surface: string;
   decision_mode: "autonomous" | "supervised" | "recommendation" | "monitor_only" | "approval";
   policy_authority: string | null;
   confidence: number | null;
@@ -174,6 +172,75 @@ export interface KsnsAction {
   created_at?: string;
 }
 
+
+export interface KsnsLifecycleDecision {
+  decision_id: string;
+  decision_type?: string;
+  decision_mode?: string;
+  policy_authority?: string | null;
+  confidence_score?: number | null;
+  risk_score?: number | null;
+  reason_codes?: string[];
+  recommended_action?: string | null;
+  approved_action?: string | null;
+  executed_action?: string | null;
+  blocked_reason?: string | null;
+  created_at?: string;
+}
+
+export interface KsnsVerification {
+  verification_id: string;
+  action_id?: string | null;
+  verification_type?: string;
+  verification_status?: string;
+  verification_source?: string;
+  expected_result?: string;
+  observed_result?: string | null;
+  evidence_refs?: string[];
+  verified_at?: string | null;
+}
+
+export interface KsnsResidualRisk {
+  risk_id: string;
+  pre_action_risk?: number;
+  post_action_risk?: number;
+  risk_delta?: number;
+  remaining_indicators?: string[];
+  remaining_exposure?: string;
+  required_follow_up?: string[];
+  business_impact?: string | null;
+  closure_recommendation?: string;
+}
+
+export interface KsnsTimelineEntry {
+  stage?: string;
+  event_type?: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  occurred_at?: string;
+}
+
+export interface KsnsLifecycleEvidenceBundle {
+  tenant_id: string;
+  incident_id: string;
+  source_events: string[];
+  correlation_result: unknown;
+  decision_refs: string[];
+  action_refs: string[];
+  verification_refs: string[];
+  kai_explanation_ref: string | null;
+  generated_at: string;
+}
+
+export interface KsnsKaiExplanationPayload {
+  request_type: string;
+  incident_summary: Record<string, unknown>;
+  decision_rationale: KsnsLifecycleDecision[];
+  action_justification: KsnsAction[];
+  verification_result: KsnsVerification[];
+  residual_risk: KsnsResidualRisk[];
+  evidence_bundle_ref: string;
+}
 export interface KsnsSocMetrics {
   incidents?: {
     total?: number;

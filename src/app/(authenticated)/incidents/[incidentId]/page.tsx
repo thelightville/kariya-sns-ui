@@ -19,6 +19,8 @@ export default function IncidentDetailPage() {
   const incident = useKsnsQuery(() => ksnsPlatformClient.getIncident(incidentId), [incidentId]);
   const timeline = useKsnsQuery(() => ksnsPlatformClient.getIncidentTimeline(incidentId), [incidentId]);
   const explanations = useKsnsQuery(() => ksnsPlatformClient.getExplanations(incidentId), [incidentId]);
+  const evidenceBundle = useKsnsQuery(() => ksnsPlatformClient.getLifecycleEvidenceBundle(incidentId), [incidentId]);
+  const kaiPayload = useKsnsQuery(() => ksnsPlatformClient.getKaiExplanationPayload(incidentId), [incidentId]);
 
   if (incident.status === "loading") {
     return <p className="text-xs text-gray-500">Loading incident...</p>;
@@ -61,7 +63,7 @@ export default function IncidentDetailPage() {
               {stage === "decide" && value(i.decision_state)}
               {stage === "act/enforce" && value(i.action_status)}
               {stage === "verify" && value(i.verification_status)}
-              {stage === "explain" && (explanations.status === "success" && explanations.data.length > 0 ? "Available" : "Pending")}
+              {stage === "explain" && ((explanations.status === "success" && explanations.data.length > 0) || kaiPayload.status === "success" ? "Available" : "Pending")}
             </p>
           </div>
         ))}
@@ -90,8 +92,8 @@ export default function IncidentDetailPage() {
           </div>
           {explanations.status === "loading" && <p className="text-xs text-gray-500">Loading explanations...</p>}
           {explanations.status === "error" && <EmptyState icon={BrainCircuit} title="Explanation unavailable" description={explanations.error} />}
-          {explanations.status === "success" && explanations.data.length === 0 && (
-            <EmptyState icon={BrainCircuit} title="No KAI explanation" description="K-SNS has not returned a KAI narrative for this incident." />
+          {explanations.status === "success" && explanations.data.length === 0 && kaiPayload.status !== "success" && (
+            <EmptyState icon={BrainCircuit} title="No KAI explanation" description="K-SNS has not returned a KAI narrative or lifecycle explanation payload for this incident." />
           )}
           {explanations.status === "success" && explanations.data.length > 0 && (
             <div className="space-y-3">
@@ -105,6 +107,18 @@ export default function IncidentDetailPage() {
           )}
         </div>
       </section>
+          {kaiPayload.status === "success" && (
+            <div className="rounded-lg border border-navy-700/50 bg-navy-950/40 p-3 text-sm text-gray-300">
+              <p className="font-medium text-white">Lifecycle explanation payload</p>
+              <p className="mt-2 text-xs text-gray-500">Evidence bundle: {kaiPayload.data.evidence_bundle_ref}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                <span>Decisions {kaiPayload.data.decision_rationale.length}</span>
+                <span>Actions {kaiPayload.data.action_justification.length}</span>
+                <span>Verification {kaiPayload.data.verification_result.length}</span>
+                <span>Residual risk {kaiPayload.data.residual_risk.length}</span>
+              </div>
+            </div>
+          )}
 
       <section className="card p-5">
         <div className="mb-4 flex items-center gap-2 text-gray-500">
@@ -112,8 +126,11 @@ export default function IncidentDetailPage() {
           <h3 className="text-xs font-semibold uppercase tracking-wide">Evidence & Timeline</h3>
         </div>
         <div className="mb-4 flex flex-wrap gap-2">
-          {(i.evidence_refs ?? []).length === 0 && <span className="badge badge-neutral">Evidence refs unavailable</span>}
-          {(i.evidence_refs ?? []).map((ref) => <span key={ref} className="badge badge-neutral">{ref}</span>)}
+          {evidenceBundle.status === "success" && evidenceBundle.data.source_events.length > 0
+            ? evidenceBundle.data.source_events.map((ref) => <span key={ref} className="badge badge-neutral">{ref}</span>)
+            : (i.evidence_refs ?? []).map((ref) => <span key={ref} className="badge badge-neutral">{ref}</span>)}
+          {evidenceBundle.status !== "success" && (i.evidence_refs ?? []).length === 0 && <span className="badge badge-neutral">Evidence refs unavailable</span>}
+          {evidenceBundle.status === "success" && <span className="badge badge-neutral">KAI ref {evidenceBundle.data.kai_explanation_ref}</span>}
         </div>
         {timeline.status === "loading" && <p className="text-xs text-gray-500">Loading timeline...</p>}
         {timeline.status === "error" && <EmptyState icon={FileSearch} title="Timeline unavailable" description={timeline.error} />}
@@ -125,7 +142,8 @@ export default function IncidentDetailPage() {
             {timeline.data.timeline.map((entry: any, index: number) => (
               <li key={`${entry.id ?? index}`} className="py-3">
                 <p className="font-medium text-white">{entry.title ?? entry.event_type ?? entry.type ?? "Timeline entry"}</p>
-                <p className="mt-1 text-xs text-gray-500">{entry.created_at ?? entry.timestamp ?? "Timestamp unavailable"}</p>
+                <p className="mt-1 text-xs text-gray-500">{entry.occurred_at ?? entry.created_at ?? entry.timestamp ?? "Timestamp unavailable"}</p>
+                {entry.description && <p className="mt-1 text-xs text-gray-400">{entry.description}</p>}
               </li>
             ))}
           </ul>
