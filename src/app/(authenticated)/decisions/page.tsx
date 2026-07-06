@@ -38,7 +38,7 @@ export default function DecisionsPage() {
       <EmptyState
         icon={GitBranch}
         title="No decisions yet"
-        description="K-SNS decisions produced by the Decide stage will appear here for operator approval. K-SNS recommends — it does not enforce decisions on its own."
+        description="K-SNS decisions produced by the Decide stage will appear here with operator approval state, action-request state, and downstream lifecycle visibility when available."
       />
     );
   }
