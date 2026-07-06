@@ -2,173 +2,140 @@
 
 > **Component:** K-SNS SOC Operations UI
 > **Part of:** Kariya Security Nervous System (K-SNS)
-> **License:** AGPL-3.0 (open core) | Proprietary (Enterprise tier)
 > **Framework:** Next.js 14 (App Router) + React 18 + TypeScript
-> **Status:** Alpha 1 baseline
-> **Governance:** ADR-0019 (K-SNS Dedicated UI Architecture)
+> **Status:** Alpha 1 UI/Console/KIF visibility pass
+> **License:** AGPL-3.0 (open core) | Proprietary (Enterprise tier)
 
----
+## Purpose
 
-## Overview
+`kariya-sns-ui` is the dedicated security-operations surface for K-SNS, the autonomous SOC brain and Security Nervous System orchestration layer for Kariya.
 
-`kariya-sns-ui` is the dedicated SOC (Security Operations Center) operator
-interface for the Kariya Security Nervous System. It is a separate,
-purpose-built application for SOC analysts and security engineers — distinct
-from the customer-facing Kariya Cloud portals (KCC/KCA/KCH/KCP), which serve
-a different audience and a different information density.
+The product lifecycle shown in this UI is:
 
-Alpha 1 provides the navigation shell and route structure for:
+**Sense -> Understand -> Decide -> Act/Enforce -> Verify -> Explain**
 
-- **Security Overview** — open incidents, trust posture, recent events
-- **Events** — Sense/Understand-stage event feed
-- **Trust** — trust score visualisation
-- **Decisions** — K-SNS decisions awaiting/given operator approval
-- **Incidents** — incident list with lightweight case grouping
-- **Recommendations** — KAI-sourced recommendations awaiting operator approval
-- **Explanations** — KAI narrative explanation viewer
-- **Integrations** — KIF connector status (read-only)
-- **Policies** — policy list with approval-gated activation
-- **Evidence Graph** — explicitly marked "not yet implemented" placeholder
+K-SNS owns orchestration, incident state, decisions, action lifecycle records, evidence, and explanation visibility. KAI reasons and explains. KES enforces edge/network actions. KEA handles endpoint telemetry and endpoint response. KIF/connectors bring third-party telemetry and action surfaces. MCP/tool governance tracks tool use, tool risk, and connector/tool control.
 
-The K-SNS backend (`kariya-sns`) is an early scaffold and is not live yet.
-Every page fails closed: if the API is unreachable, the page shows an empty/
-error state — it never fabricates mock data that could be mistaken for real
-SOC telemetry.
+## Console Relationship
 
----
+Console remains the canonical unified product portal:
 
-## Product boundary: K-SNS recommends, it does not enforce
+- `https://console.kariya.ca`
+- `https://console.kariya.ng`
 
-**K-SNS is a coordination and decision-recommendation hub — it is not an
-enforcement system.** Per ADR-0016 (decision D-02), any UI copy, API design,
-or documentation that implies K-SNS (or KAI) makes autonomous enforcement
-decisions is prohibited until AI Safety Tier 2 is validated.
+K-SNS UI can exist as a dedicated SOC/security-operations surface, but it must not replace Console as the primary product entry point. Console should deep-link into K-SNS for:
 
-Concretely, in this UI:
+- `/overview` — K-SNS dashboard
+- `/incidents` and `/incidents/{incidentId}` — incident list/detail
+- `/actions` — autonomous action lifecycle
+- `/trust` — trust/risk posture
+- `/integrations` — KIF connector and MCP/tool-governance visibility
+- `/evidence-graph` — evidence and explanation lifecycle view
 
-- Every action a SOC operator can take on a recommendation, decision, or
-  policy is phrased as **Approve**, **Reject**, or **Request Action** — never
-  "Execute", "Enforce", "Block now", or similar direct-action language.
-- This is enforced structurally, not just as a copy convention: every action
-  button in the app is built from one shared component,
-  [`src/components/ApprovalAction.tsx`](src/components/ApprovalAction.tsx),
-  which only knows how to render those three intents. There is no "execute"
-  variant to reach for.
-- "Request Action" means the operator is asking KES/KEA to carry out an
-  enforcement step under an already-approved policy. K-SNS itself never
-  performs network or endpoint enforcement — that responsibility remains
-  with KES (edge security appliance) and KEA (endpoint agent).
+## Implemented UI Surfaces
 
----
+- **Overview** — incident counts, high-risk incidents, action records, verification pending, trust posture, connector health, recent evidence, and KAI explanation coverage.
+- **Incidents** — operational incident table plus incident detail route with lifecycle, evidence refs, timeline, decision/action/verification, residual risk, and KAI explanation state.
+- **Autonomous Actions** — action ID, incident link, action type, target, enforcement surface, decision mode, policy authority, confidence, dispatch, verification, residual risk, and timestamp where backend fields exist.
+- **Trust & Risk** — current trust score, derived risk display, asset buckets, contributing event/incident/action availability, and timeline surface.
+- **Connectors & Telemetry** — KIF connector inventory, health, ingestion, auth/config status without secrets, supported telemetry/actions, readiness, and MCP/tool-governance reserved state.
+- **Evidence & Explanation** — normalized events with correlation, trust/risk movement, decision/action, dispatch, verification, residual risk, and KAI explanation columns. Missing backend fields stay pending.
+
+No page fabricates incident counts, connector readiness, MCP telemetry, KAI explanations, action success, verification success, DNS completion, or production readiness.
+
+## Backend Endpoints
+
+The UI consumes `NEXT_PUBLIC_KSNS_API_URL`, normally a `/api/v1` base URL.
+
+Currently used endpoints:
+
+| Surface | Endpoint | Status |
+|---|---|---|
+| Events/evidence | `GET /events` | Implemented in C-009 UI API |
+| Trust aggregate | `GET /trust/score` | Implemented in C-009 UI API |
+| Decisions | `GET /decisions` | Implemented in C-009 UI API |
+| Recommendations | `GET /recommendations` | Implemented in C-009 UI API |
+| KAI explanations | `GET /explanations` | Implemented in C-009 UI API |
+| Incidents | `GET /incidents`, `GET /incidents/{id}`, `GET /incidents/{id}/timeline` | Backend module exists; tenant/list shape may vary |
+| Actions | `GET /actions/?tenant_id=...` | Requires `NEXT_PUBLIC_KSNS_TENANT_ID` |
+| Connectors | `GET /connectors/?tenant_id=...` | Requires `NEXT_PUBLIC_KSNS_TENANT_ID` |
+| SOC metrics | `GET /soc/metrics?tenant_id=...` | Client-ready; not required by dashboard render |
+| MCP/tool governance | `GET /tool-governance` | Reserved/pending backend dependency |
+
+Unsupported or partially supported fields are displayed as unavailable or pending.
+
+## DNS And API Treatment
+
+Primary product portals:
+
+- `console.kariya.ca`
+- `console.kariya.ng`
+
+Dedicated K-SNS SOC surface, if retained:
+
+- `sns.kariya.ca`
+- `sns.kariya.ng`
+
+API:
+
+- `api.kariya.ca`
+- `api.kariya.ng`
+
+Do not keep a `.ng` K-SNS DNS reference without the matching `.ca` reference. This repository does not claim DNS, Cloudflare, or deployment is live; those require manual infrastructure confirmation.
+
+## Environment Variables
+
+See [`.env.example`](.env.example).
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_KSNS_API_URL` | K-SNS API base URL, for example `http://localhost:8000/api/v1` or `https://api.kariya.ca/api/v1` |
+| `NEXT_PUBLIC_KSNS_TENANT_ID` | Tenant id for tenant-scoped module routes such as actions/connectors/SOC metrics. Leave blank to show unavailable state. |
+| `NEXT_PUBLIC_KSNS_OPERATOR_ID` | Non-secret operator identifier for approval/request payloads where required. |
+| `NEXT_PUBLIC_APP_DOMAIN` | Public K-SNS surface, usually `sns.kariya.ca` or `sns.kariya.ng`. |
+
+No `NEXT_PUBLIC_*` value may contain a credential or secret.
 
 ## Quick Start
 
-### Requirements
+Requirements:
 
 - Node.js 20+
 - npm 10+
 
-### Development
-
 ```bash
-cp .env.example .env.local   # set NEXT_PUBLIC_KSNS_API_URL if you have a local K-SNS API
+cp .env.example .env.local
 npm install
-npm run dev                   # starts on http://localhost:3010
+npm run dev
 ```
 
-Alpha 1 login is a local stub: any email/password combination succeeds and
-sets the `sns_token` httpOnly cookie. There is no live K-SNS auth endpoint
-wired up yet (see `src/app/api/auth/login/route.ts`).
+The dev server starts on `http://localhost:3010`.
 
-### Build
+Alpha 1 login is a local stub: any email/password combination succeeds and sets the `sns_token` httpOnly cookie. Live auth is still a backend dependency.
+
+## Checks
 
 ```bash
 npm run build
-npm run start
-```
-
-### Lint
-
-```bash
 npm run lint
 ```
 
----
+## Known Gaps
 
-## Environment Variables
-
-See [`.env.example`](.env.example) for all variables.
-
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_KSNS_API_URL` | K-SNS C-009 external API base URL, called directly by `src/lib/ksnsPlatformClient.ts` |
-| `NEXT_PUBLIC_APP_DOMAIN` | Public domain the app is served from (`sns.kariya.ca` or `sns.kariya.ng`) |
-
----
-
-## Architecture
-
-- **Framework:** Next.js 14, App Router, TypeScript, Tailwind CSS, Zustand
-  (see ADR-0019 for the full technology rationale).
-- **Auth:** JWT in an httpOnly cookie (`sns_token`). Next.js edge middleware
-  (`src/middleware.ts`) enforces authentication on every route except
-  `/login`. Token issuance/refresh is intended to happen server-side via
-  `src/app/api/auth/*` route handlers — Alpha 1 ships a stub login route
-  only.
-- **API client:** `src/lib/ksnsPlatformClient.ts` is the single typed fetch
-  client used by every page to call the K-SNS C-009 API. It fails closed —
-  network errors and non-2xx responses raise a `KsnsClientError` that pages
-  turn into an `EmptyState`, never mock data.
-- **State:** Zustand (`src/stores/`) holds lightweight client-side session
-  info (e.g. operator email for display). The JWT itself is never read or
-  stored client-side — the httpOnly cookie is the only source of truth for
-  authentication.
-
-```
-Browser → kariya-sns-ui (Next.js) → K-SNS API (kariya-sns backend, C-009)
-```
-
-### Styling
-
-This repo does not currently consume `@kariya/ui` as an installed package
-dependency — wiring a private/local npm package into `npm ci`-based CI was
-judged not worth blocking Alpha 1 on. Instead, `tailwind.config.js` mirrors
-the same color tokens as `kariya-ui/tailwind.config.base.js` (kariya orange,
-navy palette, threat severity colors) so the visual language matches the
-rest of the Kariya portal family. Revisit package consumption once
-`@kariya/ui` is published somewhere `npm ci` can reach without extra
-credentials.
-
----
-
-## Deployment
-
-Per ADR-0019, `kariya-sns-ui` is deployed on CT119 (172.16.16.119), served
-behind Cloudflare at:
-
-- `https://sns.kariya.ca`
-- `https://sns.kariya.ng`
-
-Both domains route to the same Next.js origin (port 3000 behind nginx).
-
----
+- MCP/tool-governance has normalized telemetry examples in K-SNS, but no dedicated UI inventory endpoint yet.
+- Connector inventory requires tenant-scoped backend configuration and does not imply live readiness without health/ingestion data.
+- Action verification and dispatch result fields display only when returned by the backend.
+- Incident detail depth depends on backend module fields; missing correlation/evidence/action fields remain pending.
+- DNS/Cloudflare/deployment status is not asserted by this repo.
 
 ## Related Repositories
 
 | Repository | Role |
 |---|---|
-| `kariya-sns` | K-SNS backend target API (early scaffold; production K-SNS currently runs from `kariya-cloud`) |
-| `kariya-cloud` | Kariya Cloud portal backend / current K-SNS production runtime |
-| `kariya-central` | Kariya Cloud enterprise customer portal (KCC) |
-| `kariya-ui` | Shared design system (`@kariya/ui`) |
-| `kariya-governance` | ADRs and platform governance |
-
----
-
-## Governance
-
-All changes must follow the [Kariya Engineering Governance](https://github.com/thelightville/kariya-governance),
-in particular ADR-0011, ADR-0012, ADR-0016, and ADR-0019.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and PR
-requirements.
+| `kariya-sns` | K-SNS backend API and orchestration runtime |
+| `kariya-integrations` | KIF SDK and connector implementations |
+| `kariya-kai` | KAI reasoning and explanation service |
+| `kariya-kes` | Edge/network enforcement surface |
+| `kariya-kea` | Endpoint telemetry and response surface |
+| `kariya-governance` | ADRs, missions, and platform governance |
+| `kariya-ui` | Shared design system |
