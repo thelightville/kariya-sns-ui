@@ -14,6 +14,23 @@ export type LifecycleStage =
   | "verify"
   | "explain";
 
+export interface KsnsLifecycleStatus {
+  sense?: string;
+  understand?: string;
+  decide?: string;
+  act?: string;
+  verify?: string;
+  explain?: string;
+  residual_risk?: string;
+  dispatch_status?: string;
+  verification_status?: string;
+  honesty?: {
+    dispatch_success_fabricated?: boolean;
+    verification_success_fabricated?: boolean;
+    kai_live_required?: boolean;
+  };
+}
+
 export interface KsnsEvent {
   event_id: string;
   type: string;
@@ -73,6 +90,7 @@ export interface KsnsIncident {
   action_status?: string | null;
   verification_status?: string | null;
   lifecycle_state?: LifecycleStage | string | null;
+  lifecycle_status?: KsnsLifecycleStatus | null;
   residual_risk?: string | null;
   narrative?: string | null;
   contributing_event_ids?: string[];
@@ -229,6 +247,7 @@ export interface KsnsLifecycleEvidenceBundle {
   action_refs: string[];
   verification_refs: string[];
   kai_explanation_ref: string | null;
+  lifecycle_status?: KsnsLifecycleStatus | null;
   generated_at: string;
 }
 
@@ -275,6 +294,7 @@ export interface KsnsEvidenceRecord {
   verification_result?: string | null;
   kai_explanation?: string | null;
   residual_risk?: string | null;
+  lifecycle_status?: string | null;
 }
 
 export interface KsnsToolGovernanceRecord {

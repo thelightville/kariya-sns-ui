@@ -83,6 +83,7 @@ export default function EvidenceGraphPage() {
             <div className="text-sm text-gray-300">
               <p>{display(record.verification_result)}</p>
               <p className="mt-1 text-xs text-gray-500">Residual {display(record.residual_risk)}</p>
+              <p className="mt-1 text-xs text-gray-500">Lifecycle {display(record.lifecycle_status)}</p>
             </div>
             <div className="text-sm text-gray-300">
               {record.kai_explanation ? (
