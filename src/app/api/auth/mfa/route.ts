@@ -6,8 +6,6 @@ const IS_PROD = process.env.NODE_ENV === "production";
 
 type AuthResponse = {
   access_token?: string;
-  mfa_required?: boolean;
-  mfa_token?: string;
   role?: string;
   user?: {
     email?: string;
@@ -36,7 +34,7 @@ function setSessionCookie(response: NextResponse, accessToken: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const target = authUrl("/cloud/login");
+  const target = authUrl("/cloud/mfa/verify");
   if (!target) {
     return NextResponse.json(
       { error: "Authentication service is not configured" },
@@ -45,12 +43,18 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
-  const email = typeof body?.email === "string" ? body.email.trim() : "";
-  const password = typeof body?.password === "string" ? body.password : "";
+  const mfaToken = typeof body?.mfa_token === "string" ? body.mfa_token : "";
+  const code = typeof body?.code === "string" ? body.code.trim() : "";
 
-  if (!email || !password) {
+  if (!mfaToken || !code) {
     return NextResponse.json(
-      { error: "Email and password are required" },
+      { error: "MFA token and code are required" },
+      { status: 400 }
+    );
+  }
+  if (!/^\d{6}$/.test(code)) {
+    return NextResponse.json(
+      { error: "MFA code must be 6 digits" },
       { status: 400 }
     );
   }
@@ -60,7 +64,7 @@ export async function POST(request: NextRequest) {
     upstream = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ mfa_token: mfaToken, code }),
       cache: "no-store",
     });
   } catch {
@@ -73,19 +77,10 @@ export async function POST(request: NextRequest) {
   const data = (await upstream.json().catch(() => ({}))) as AuthResponse;
   if (!upstream.ok) {
     return NextResponse.json(
-      { error: data.detail || "Login failed" },
+      { error: data.detail || "MFA verification failed" },
       { status: upstream.status }
     );
   }
-
-  if (data.mfa_required || data.mfa_token) {
-    return NextResponse.json({
-      mfa_required: true,
-      mfa_token: data.mfa_token,
-      role: data.role ?? data.user?.role ?? null,
-    });
-  }
-
   if (!data.access_token) {
     return NextResponse.json(
       { error: "Authentication service did not return a session" },
