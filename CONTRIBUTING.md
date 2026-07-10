@@ -19,7 +19,7 @@ Convergence), and ADR-0019 (K-SNS Dedicated UI Architecture).
 ### Setup
 
 ```bash
-cp .env.example .env.local   # configure NEXT_PUBLIC_KSNS_API_URL
+cp .env.example .env.local   # configure server-side K_SNS_BASE_URL
 npm install
 npm run dev                   # http://localhost:3010
 ```
@@ -105,5 +105,7 @@ Before opening a PR:
 - **No client-side secrets.** Environment variables exposed to the browser
   (`NEXT_PUBLIC_*`) must not contain secrets.
 - Never hard-code API URLs, tenant IDs, or auth tokens.
+- Browser code must call the same-origin `/api/ksns` BFF, not the raw K-SNS
+  backend URL. Keep `K_SNS_BASE_URL` server-side only.
 - The K-SNS JWT lives only in the httpOnly `sns_token` cookie — never store
   it in localStorage, sessionStorage, or a client-readable cookie.

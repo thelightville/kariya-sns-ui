@@ -22,7 +22,7 @@ import type {
   KsnsTrustScore,
 } from "@/types/ksns";
 
-const API_BASE = process.env.NEXT_PUBLIC_KSNS_API_URL ?? "";
+const API_BASE = "/api/ksns";
 const TENANT_ID = process.env.NEXT_PUBLIC_KSNS_TENANT_ID ?? "";
 const OPERATOR_ID = process.env.NEXT_PUBLIC_KSNS_OPERATOR_ID ?? "sns-ui-alpha1";
 
@@ -48,7 +48,7 @@ function statusMessage(status: number, path: string) {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_BASE) {
     throw new KsnsClientError(
-      "NEXT_PUBLIC_KSNS_API_URL is not configured; K-SNS API is unreachable."
+      "K-SNS UI BFF is not configured; K-SNS API is unreachable."
     );
   }
 

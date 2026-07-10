@@ -17,10 +17,10 @@ Please allow 90 days to remediate before public disclosure.
 
 - Authentication uses an httpOnly `sns_token` cookie. It must never be
   exposed to client-side JavaScript or logged.
-- `NEXT_PUBLIC_KSNS_API_URL` is a public (browser-visible) environment
-  variable by design — it must never carry embedded credentials.
+- Browser K-SNS API calls go through the same-origin `/api/ksns` BFF.
+  `K_SNS_BASE_URL` is server-side only and must never be exposed as
+  `NEXT_PUBLIC_*` or embedded in the client bundle.
 - Alpha 1 ships a local login stub (`src/app/api/auth/login/route.ts`) that
-  accepts any credentials and always succeeds. This must not be deployed to
-  any environment reachable outside a local development machine, and must be
-  replaced with a real call to the K-SNS auth endpoint before any shared or
-  production deployment.
+  accepts any credentials and always succeeds. This is acceptable only for
+  explicitly approved Alpha 1 validation. It must be replaced with real
+  authentication before production launch.
