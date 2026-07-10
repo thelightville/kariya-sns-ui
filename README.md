@@ -45,25 +45,27 @@ No page fabricates incident counts, connector readiness, MCP telemetry, KAI expl
 
 ## Backend Endpoints
 
-The UI consumes `NEXT_PUBLIC_KSNS_API_URL`, normally a `/api/v1` base URL.
+Public browser code calls the same-origin K-SNS UI BFF at `/api/ksns/*`. The
+BFF uses server-side `K_SNS_BASE_URL` to reach the private K-SNS API. The raw
+K-SNS backend URL must not appear in the browser bundle or any `NEXT_PUBLIC_*`
+variable for public deployment.
 
-Currently used endpoints:
+Currently used BFF routes:
 
-| Surface | Endpoint | Status |
-|---|---|---|
-| Events/evidence | `GET /events` | Implemented in C-009 UI API |
-| Trust aggregate | `GET /trust/score` | Implemented in C-009 UI API |
-| Decisions | `GET /decisions` | Implemented in C-009 UI API |
-| Recommendations | `GET /recommendations` | Implemented in C-009 UI API |
-| KAI explanations | `GET /explanations` | Implemented in C-009 UI API |
-| Incidents | `GET /incidents`, `GET /incidents/{id}`, `GET /incidents/{id}/timeline` | Backend module exists; tenant/list shape may vary |
-| Actions | `GET /actions/?tenant_id=...` | Requires `NEXT_PUBLIC_KSNS_TENANT_ID` |
-| Connectors | `GET /connectors/?tenant_id=...` | Requires `NEXT_PUBLIC_KSNS_TENANT_ID` |
-| SOC metrics | `GET /soc/metrics?tenant_id=...` | Client-ready; not required by dashboard render |
-| MCP/tool governance | `GET /tool-governance` | Reserved/pending backend dependency |
+| Surface | Browser route | Upstream K-SNS endpoint | Status |
+|---|---|---|---|
+| Events/evidence | `GET /api/ksns/events` | `GET /events` | Implemented in C-009 UI API |
+| Trust aggregate | `GET /api/ksns/trust/score` | `GET /trust/score` | Implemented in C-009 UI API |
+| Decisions/actions | `GET /api/ksns/decisions` | `GET /decisions` | Implemented in C-009 UI API |
+| Recommendations | `GET /api/ksns/recommendations` | `GET /recommendations` | Implemented in C-009 UI API |
+| KAI explanations | `GET /api/ksns/explanations` | `GET /explanations` | Implemented in C-009 UI API |
+| Incidents | `GET /api/ksns/incidents`, `GET /api/ksns/incidents/{id}`, `GET /api/ksns/incidents/{id}/timeline` | Incident lifecycle endpoints | Backend-driven, no fabricated records |
+| Actions | `GET /api/ksns/actions/?tenant_id=...` | `GET /actions/?tenant_id=...` | Tenant scoped; empty/unavailable state is honest |
+| Connectors | `GET /api/ksns/connectors/?tenant_id=...` | `GET /connectors/?tenant_id=...` | Tenant scoped; readiness is backend-driven |
+| SOC metrics | `GET /api/ksns/soc/metrics?tenant_id=...` | `GET /soc/metrics?tenant_id=...` | Client-ready; not required by dashboard render |
+| MCP/tool governance | `GET /api/ksns/tool-governance` | `GET /tool-governance` | Reserved/pending backend dependency |
 
 Unsupported or partially supported fields are displayed as unavailable or pending.
-
 ## DNS And API Treatment
 
 Primary product portals:
@@ -89,13 +91,13 @@ See [`.env.example`](.env.example).
 
 | Variable | Description |
 |---|---|
-| `NEXT_PUBLIC_KSNS_API_URL` | K-SNS API base URL, for example `http://localhost:8000/api/v1` or `https://api.kariya.ca/api/v1` |
-| `NEXT_PUBLIC_KSNS_TENANT_ID` | Tenant id for tenant-scoped module routes such as actions/connectors/SOC metrics. Leave blank to show unavailable state. |
+| `K_SNS_BASE_URL` | Server-side K-SNS API base URL used only by `/api/ksns/*`. Never expose it as `NEXT_PUBLIC_*`. |
+| `K_SNS_TENANT_ID` | Optional server-side tenant header forwarded by the BFF where needed. |
+| `NEXT_PUBLIC_KSNS_TENANT_ID` | Non-secret Alpha 1 tenant hint for tenant-scoped module routes. Leave blank to show unavailable state. |
 | `NEXT_PUBLIC_KSNS_OPERATOR_ID` | Non-secret operator identifier for approval/request payloads where required. |
 | `NEXT_PUBLIC_APP_DOMAIN` | Public K-SNS surface, usually `sns.kariya.ca` or `sns.kariya.ng`. |
 
-No `NEXT_PUBLIC_*` value may contain a credential or secret.
-
+No `NEXT_PUBLIC_*` value may contain a credential, secret, or internal backend URL.
 ## Quick Start
 
 Requirements:

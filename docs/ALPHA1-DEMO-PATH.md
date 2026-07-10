@@ -5,17 +5,17 @@ This path shows the merged K-SNS lifecycle without claiming production connector
 ## Local services
 
 1. Start K-SNS backend from `kariya-sns` with its normal local database configuration.
-2. Run migrations; the merged lifecycle stack has Alembic head `m7_sns_004`.
+2. Run migrations; the Alpha 1 lifecycle stack has Alembic head `m7_sns_005`.
 3. Start K-SNS UI with:
 
 ```bash
-NEXT_PUBLIC_KSNS_API_URL=http://localhost:8000/api/v1 NEXT_PUBLIC_KSNS_TENANT_ID=<tenant-uuid> npm run dev
+K_SNS_BASE_URL=http://localhost:8000/api/v1 NEXT_PUBLIC_KSNS_TENANT_ID=<tenant-uuid> npm run dev
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:NEXT_PUBLIC_KSNS_API_URL="http://localhost:8000/api/v1"
+$env:K_SNS_BASE_URL="http://localhost:8000/api/v1"
 $env:NEXT_PUBLIC_KSNS_TENANT_ID="<tenant-uuid>"
 npm run dev
 ```
@@ -50,7 +50,7 @@ curl http://localhost:8000/api/v1/decisions
 curl http://localhost:8000/api/v1/explanations
 ```
 
-5. Open K-SNS UI:
+5. Open K-SNS UI. Browser calls should stay same-origin through `/api/ksns/*`; direct backend curl commands above are private backend smoke checks only.
 
 - `http://localhost:3010/overview`
 - `http://localhost:3010/incidents`

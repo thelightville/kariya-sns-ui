@@ -29,5 +29,5 @@ export function middleware(request: NextRequest) {
 export const config = {
   // Run middleware on all paths except static assets and API auth routes
   // (API routes perform their own auth handling).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth|api/ksns).*)"],
 };
