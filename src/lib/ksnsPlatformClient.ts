@@ -107,6 +107,7 @@ function normaliseIncident(raw: any): KsnsIncident {
   const firstVerification = verifications[0];
   const firstResidual = residualRisk[0];
   const source = raw.incident ?? raw;
+  const lifecycleStatus = source.lifecycle_status ?? raw.lifecycle_status ?? null;
 
   return {
     incident_id: source.incident_id ?? source.id,
@@ -126,6 +127,7 @@ function normaliseIncident(raw: any): KsnsIncident {
     verification_status:
       source.verification_status ?? firstVerification?.verification_status ?? null,
     lifecycle_state: source.lifecycle_state ?? source.stage ?? source.status ?? null,
+    lifecycle_status: lifecycleStatus,
     residual_risk:
       source.residual_risk ?? firstResidual?.closure_recommendation ?? null,
     narrative: source.narrative ?? null,
@@ -196,6 +198,16 @@ function normaliseConnector(raw: any): KsnsConnector {
     supported_telemetry_types: raw.supported_telemetry_types ?? [],
     supported_actions: raw.supported_actions ?? [],
   };
+}
+
+function summariseLifecycleStatus(status: any) {
+  if (!status || typeof status !== "object") return null;
+  const parts = [
+    status.decide ? `Decide ${status.decide}` : null,
+    status.dispatch_status ? `Dispatch ${status.dispatch_status}` : null,
+    status.verification_status ? `Verify ${status.verification_status}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" / ") : null;
 }
 
 function summariseCorrelation(correlation: unknown) {
@@ -340,6 +352,7 @@ export const ksnsPlatformClient = {
             kai_explanation: kaiData?.evidence_bundle_ref ?? evidenceData?.kai_explanation_ref ?? null,
             residual_risk:
               firstResidual?.closure_recommendation ?? lifecycleData.residual_risk ?? null,
+            lifecycle_status: summariseLifecycleStatus(evidenceData?.lifecycle_status ?? lifecycleData.lifecycle_status),
           } satisfies KsnsEvidenceRecord;
         })
       );

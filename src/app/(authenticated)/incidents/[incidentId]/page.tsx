@@ -31,6 +31,16 @@ export default function IncidentDetailPage() {
   }
 
   const i = incident.data;
+  const lifecycleStatus = i.lifecycle_status;
+  const statusForStage = (stage: string) => {
+    if (stage === "sense") return lifecycleStatus?.sense ?? value((i.source_components ?? []).join(", "));
+    if (stage === "understand") return lifecycleStatus?.understand ?? value(i.lifecycle_state);
+    if (stage === "decide") return lifecycleStatus?.decide ?? value(i.decision_state);
+    if (stage === "act/enforce") return lifecycleStatus?.dispatch_status ?? lifecycleStatus?.act ?? value(i.action_status);
+    if (stage === "verify") return lifecycleStatus?.verification_status ?? lifecycleStatus?.verify ?? value(i.verification_status);
+    if (stage === "explain") return lifecycleStatus?.explain ?? ((explanations.status === "success" && explanations.data.length > 0) || kaiPayload.status === "success" ? "Available" : "Pending");
+    return "Pending";
+  };
 
   return (
     <div className="space-y-6">
@@ -58,12 +68,7 @@ export default function IncidentDetailPage() {
           <div key={stage} className="card p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{stage}</p>
             <p className="mt-2 text-sm text-white">
-              {stage === "sense" && value((i.source_components ?? []).join(", "))}
-              {stage === "understand" && value(i.lifecycle_state)}
-              {stage === "decide" && value(i.decision_state)}
-              {stage === "act/enforce" && value(i.action_status)}
-              {stage === "verify" && value(i.verification_status)}
-              {stage === "explain" && ((explanations.status === "success" && explanations.data.length > 0) || kaiPayload.status === "success" ? "Available" : "Pending")}
+              {statusForStage(stage)}
             </p>
           </div>
         ))}
