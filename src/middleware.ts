@@ -10,7 +10,7 @@ const AUTH_COOKIE = "sns_token";
 // Public paths that never require authentication.
 const PUBLIC_PATHS = ["/login"];
 
-function relativeRedirect(location) {
+function relativeRedirect(location: string) {
   return new NextResponse(null, {
     status: 307,
     headers: { Location: location },
