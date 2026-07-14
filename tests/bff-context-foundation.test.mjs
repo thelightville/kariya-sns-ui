@@ -30,7 +30,7 @@ function introspection(role = "analyst") {
 }
 
 test("BFF context uses the exact v1 key set and Cloud-derived authority", () => {
-  const context = buildBffContext(introspection(), REQUEST_ID);
+  const context = buildBffContext(introspection(), "ng", REQUEST_ID);
   assert.deepEqual(Object.keys(context).sort(), [...BFF_CONTEXT_KEYS]);
   assert.equal(context["x-kariya-context-version"], BFF_CONTEXT_VERSION);
   assert.equal(context["x-kariya-region"], "ng");
@@ -56,6 +56,7 @@ test("inactive, cross-country, malformed, missing and extra context fail closed"
     () =>
       buildBffContext(
         { contract_version: "cloud.session-authority.v1", active: false },
+        "ng",
         REQUEST_ID
       ),
     /active introspection/
@@ -64,12 +65,23 @@ test("inactive, cross-country, malformed, missing and extra context fail closed"
     () =>
       buildBffContext(
         { ...introspection(), issuer: "https://console.kariya.ca" },
+        "ng",
         REQUEST_ID
       ),
     /crosses/
   );
 
-  const valid = buildBffContext(introspection(), REQUEST_ID);
+  const ca = {
+    ...introspection(),
+    issuer: "https://console.kariya.ca",
+    audience: "https://sns.kariya.ca",
+    destination_host: "sns.kariya.ca",
+    region: "ca",
+  };
+  assert.throws(() => buildBffContext(ca, "ng", REQUEST_ID), /crosses/);
+  assert.throws(() => buildBffContext(introspection(), "ca", REQUEST_ID), /crosses/);
+
+  const valid = buildBffContext(introspection(), "ng", REQUEST_ID);
   const missing = { ...valid };
   delete missing["x-kariya-region"];
   assert.throws(() => validateBffContext(missing), /exactly/);
