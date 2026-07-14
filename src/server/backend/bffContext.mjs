@@ -62,11 +62,8 @@ export function mapCloudRoleToBackend(role) {
   return mapped;
 }
 
-export function buildBffContext(activeIntrospection, requestId) {
-  const validated = validateIntrospectionResult(
-    activeIntrospection,
-    activeIntrospection?.region
-  );
+export function buildBffContext(activeIntrospection, expectedRegion, requestId) {
+  const validated = validateIntrospectionResult(activeIntrospection, expectedRegion);
   if (validated.active !== true) fail("only an active introspection can create context");
   canonical32(requestId, "request_id");
 
