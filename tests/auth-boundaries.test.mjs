@@ -6,6 +6,14 @@ import { DEFAULT_NEXT_PATH, safeNextPath } from "../src/lib/safeNextPath.mjs";
 const loginPageUrl = new URL("../src/app/login/page.tsx", import.meta.url);
 const loginPage = await readFile(loginPageUrl, "utf8");
 
+function nestedSeparator(separator, layers) {
+  let value = `${separator}evil.example/phish`;
+  for (let layer = 0; layer < layers; layer += 1) {
+    value = encodeURIComponent(value);
+  }
+  return `/${value}`;
+}
+
 const unsafeDestinations = [
   null,
   undefined,
@@ -23,6 +31,12 @@ const unsafeDestinations = [
   "/safe%0d%0aX-Injected:yes",
   "/%",
   "/safe\u0000path",
+  nestedSeparator("/", 4),
+  nestedSeparator("\\", 4),
+  nestedSeparator("/", 8),
+  nestedSeparator("\\", 8),
+  nestedSeparator("/", 9),
+  nestedSeparator("\\", 9),
 ];
 
 function assertUnsafeDestinationsUseDefault(flow) {
@@ -42,6 +56,18 @@ test("safeNextPath preserves valid same-origin absolute paths", () => {
     "/incidents?state=open#latest"
   );
   assert.equal(safeNextPath("/evidence%20review"), "/evidence%20review");
+  assert.equal(safeNextPath("/caf%C3%A9"), "/caf%C3%A9");
+  assert.equal(
+    safeNextPath("/reports%20and%20evidence?tag=high%20risk"),
+    "/reports%20and%20evidence?tag=high%20risk"
+  );
+});
+
+test("deeply nested slash and backslash encodings fail closed", () => {
+  for (const layers of [4, 8, 9, 16]) {
+    assert.equal(safeNextPath(nestedSeparator("/", layers)), DEFAULT_NEXT_PATH);
+    assert.equal(safeNextPath(nestedSeparator("\\", layers)), DEFAULT_NEXT_PATH);
+  }
 });
 
 test("password completion rejects unsafe next destinations", () => {
