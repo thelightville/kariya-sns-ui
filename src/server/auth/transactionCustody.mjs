@@ -286,6 +286,7 @@ export function validateTransactionRecord(record) {
 export function assertTransactionCas(current, next, expectedVersion) {
   const before = validateTransactionRecord(current);
   const after = validateTransactionRecord(next);
+  assertConsumerTransactionTransition(before.state, after.state);
   const immutableIdentityMatches =
     before.id === after.id &&
     before.schema_version === after.schema_version &&
@@ -311,7 +312,6 @@ export function assertTransactionCas(current, next, expectedVersion) {
   ) {
     fail("transaction CAS identity or version mismatch");
   }
-  assertConsumerTransactionTransition(before.state, after.state);
   if (after.state === "redeem_sent" && after.envelope !== null) {
     fail("redeem_sent must clear encrypted transaction secrets");
   }
