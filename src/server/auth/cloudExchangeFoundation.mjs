@@ -173,11 +173,12 @@ export function validateRedemptionResult(value, expectedRegion, expectedNonce) {
   const issuedAt = requireSafeTimestamp(value.issued_at, "issued_at");
   const expiresAt = requireSafeTimestamp(value.expires_at, "expires_at");
   const serverTime = requireSafeTimestamp(value.server_time, "server_time");
-  if (issuedAt !== serverTime || expiresAt <= serverTime) {
+  if (
+    expiresAt - issuedAt !== SESSION_COOKIE_MAX_AGE_SECONDS ||
+    serverTime < issuedAt ||
+    serverTime >= expiresAt
+  ) {
     fail("Cloud redemption time authority is invalid or expired");
-  }
-  if (expiresAt - serverTime > SESSION_COOKIE_MAX_AGE_SECONDS) {
-    fail("Cloud redemption session exceeds the v1 lifetime");
   }
   return Object.freeze({ ...value });
 }
@@ -241,8 +242,13 @@ export function calculateSessionCookieMaxAge({ issued_at, expires_at, server_tim
   const issuedAt = requireSafeTimestamp(issued_at, "issued_at");
   const expiresAt = requireSafeTimestamp(expires_at, "expires_at");
   const serverTime = requireSafeTimestamp(server_time, "server_time");
-  if (issuedAt !== serverTime) fail("Cloud issued_at and server_time must match");
+  if (
+    expiresAt - issuedAt !== SESSION_COOKIE_MAX_AGE_SECONDS ||
+    serverTime < issuedAt ||
+    serverTime >= expiresAt
+  ) {
+    fail("Cloud session time profile is invalid or expired");
+  }
   const remaining = expiresAt - serverTime;
-  if (remaining <= 0) fail("Cloud session has no positive lifetime");
   return Math.min(SESSION_COOKIE_MAX_AGE_SECONDS, remaining);
 }
