@@ -40,5 +40,8 @@ jobs:
           npm run verify:auth
           npm run verify:public-bff
 
+      - name: Verify protected-route HTTP readiness
+        run: npm run verify:http
+
       - name: Lint
         run: npm run lint
