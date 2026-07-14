@@ -1,19 +1,23 @@
 "use client";
 
 import { ExternalLink, LockKeyhole } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import {
   buildKesConsoleReviewUrl,
   isKesTargetedAction,
 } from "@/lib/kesConsoleHandoff.mjs";
 import type { KsnsAction } from "@/types/ksns";
 
-export default function KesConsoleHandoff({ action }: { action: KsnsAction }) {
-  const [hostname, setHostname] = useState("");
+const subscribeToHostname = () => () => {};
+const getHostnameSnapshot = () => window.location.hostname;
+const getServerHostnameSnapshot = () => "";
 
-  useEffect(() => {
-    setHostname(window.location.hostname);
-  }, []);
+export default function KesConsoleHandoff({ action }: { action: KsnsAction }) {
+  const hostname = useSyncExternalStore(
+    subscribeToHostname,
+    getHostnameSnapshot,
+    getServerHostnameSnapshot
+  );
 
   if (!isKesTargetedAction(action.enforcement_surface)) {
     return null;
