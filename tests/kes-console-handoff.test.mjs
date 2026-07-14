@@ -39,7 +39,13 @@ test("approved sns hosts map only to the paired regional Console KES view", () =
 });
 
 test("local, unapproved, incomplete, or malformed handoffs fail closed", () => {
-  for (const hostname of ["localhost", "127.0.0.1", "unapproved.kariya.ng", "sns.kariya.ng."]) {
+  for (const hostname of [
+    "localhost",
+    "127.0.0.1",
+    "unapproved.kariya.ng",
+    "sns.kariya.ng.",
+    "__proto__",
+  ]) {
     assert.equal(
       buildKesConsoleReviewUrl({ hostname, actionId: "action-01", incidentId: "incident-01" }),
       null
