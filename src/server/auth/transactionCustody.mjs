@@ -214,7 +214,6 @@ export function validateTransactionRecord(record) {
   if (!UUID.test(record.id)) fail("transaction id must be a canonical UUID");
   regionalTuple(record.region);
   canonical32(record.state_digest, "state_digest");
-  nullableCanonical32(record.cloud_request_id_digest, "cloud_request_id_digest");
   if (!safeTransactionReturnPath(record.normalized_return_path)) {
     fail("normalized_return_path violates the same-origin profile");
   }
@@ -235,13 +234,20 @@ export function validateTransactionRecord(record) {
     record.cloud_request_id_digest === null &&
     record.cloud_issued_at === null &&
     record.cloud_expires_at === null;
+  const cloudAuthorityPresent =
+    record.cloud_request_id_digest !== null &&
+    record.cloud_issued_at !== null &&
+    record.cloud_expires_at !== null;
+  if (!cloudAuthorityAbsent && !cloudAuthorityPresent) {
+    fail("transaction cannot claim partial Cloud authority");
+  }
   const unregisteredTerminal =
     TERMINAL_STATES.has(record.state) &&
     record.state !== "completed" &&
     cloudAuthorityAbsent;
   if (record.state === "created" || unregisteredTerminal) {
     if (!cloudAuthorityAbsent) {
-      fail("unregistered transaction cannot claim partial Cloud authority");
+      fail("unregistered transaction cannot claim Cloud authority");
     }
   } else {
     canonical32(record.cloud_request_id_digest, "cloud_request_id_digest");
