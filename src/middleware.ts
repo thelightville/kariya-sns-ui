@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  AUTHENTICATED_HOME_PATH,
+  loginRedirectLocation,
+} from "@/lib/authRedirects.mjs";
 
 // K-SNS UI auth cookie — httpOnly JWT set by /api/auth/login (see ADR-0019 §6).
 const AUTH_COOKIE = "sns_token";
 
 // Public paths that never require authentication.
 const PUBLIC_PATHS = ["/login"];
+
+function relativeRedirect(location) {
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: location },
+  });
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -14,13 +25,11 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
 
   if (!isPublic && !token) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    return relativeRedirect(loginRedirectLocation(pathname));
   }
 
   if (isPublic && token) {
-    return NextResponse.redirect(new URL("/overview", request.url));
+    return relativeRedirect(AUTHENTICATED_HOME_PATH);
   }
 
   return NextResponse.next();
