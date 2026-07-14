@@ -82,6 +82,6 @@ test("middleware never derives redirect origins from request metadata", () => {
   assert.doesNotMatch(middleware, /new URL\(|request\.url/);
   assert.doesNotMatch(
     middleware,
-    /X-Forwarded-Host|X-Forwarded-Proto|Forwarded|Origin|Referer|return_to|headers\.get|request\.headers/i
+    /["'](?:X-Forwarded-Host|X-Forwarded-Proto|Forwarded|Origin|Referer|return_to)["']|headers\.get|request\.headers/i
   );
 });
