@@ -16,7 +16,7 @@ import workflow from "@/data/founderWorkflow.json";
 
 const stateStyle: Record<string, string> = {
   implemented: "badge-ok",
-  available: "badge-ok",
+  "contract-only": "badge-neutral",
   synthetic: "badge-warn",
   unavailable: "badge-neutral",
 };
