@@ -43,7 +43,12 @@ const child = spawn(
   [nextBin, "start", "--hostname", host, "--port", String(port)],
   {
     cwd: process.cwd(),
-    env: { ...process.env, NODE_ENV: "production" },
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      KARIYA_SNS_PUBLIC_ORIGIN: origin,
+      KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN: "1",
+    },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   }
@@ -79,10 +84,10 @@ try {
         Referer: "https://evil.example/phish",
       },
     });
-    assert.equal(response.status, 307, pathname);
+    assert.equal(response.status, 307, `${pathname}\n${output()}`);
     assert.equal(
       response.headers.get("location"),
-      `/login?next=${encodeURIComponent(pathname)}`,
+      `${origin}/login?next=${encodeURIComponent(pathname)}`,
       pathname
     );
   }
@@ -93,16 +98,16 @@ try {
       headers: { Host: "unapproved.internal" },
     });
     const location = response.headers.get("location");
-    assert.equal(response.status, 307);
-    assert.match(location, /^\/(?!\/)/);
-    assert.doesNotMatch(
+    assert.equal(response.status, 307, output());
+    assert.equal(
       location,
-      /localhost|127\.0\.0\.1|evil\.example|\.internal|sns\.kariya|console\.kariya/i
+      `${origin}/login?next=${encodeURIComponent(pathname)}`
     );
+    assert.doesNotMatch(location, /evil\.example|unapproved\.internal|sns\.kariya|console\.kariya/i);
   }
 
   console.log(
-    `http-readiness verification passed on ephemeral loopback port ${port}`
+    `http-readiness verification passed on explicit loopback origin ${origin}`
   );
 } finally {
   if (child.exitCode === null) {
