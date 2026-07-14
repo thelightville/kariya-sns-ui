@@ -13,7 +13,7 @@ const [sidebar, workflow, page] = await Promise.all([
 ]);
 
 test("founder workflow is discoverable in K-SNS navigation", () => {
-  assert.match(sidebar, /href: "\/workflow", label: "Founder Workflow"/);
+  assert.match(sidebar, /href: "\/workflow", label: "Security Workflow"/);
 });
 
 test("private API capability is contract-only rather than a live integration claim", () => {
