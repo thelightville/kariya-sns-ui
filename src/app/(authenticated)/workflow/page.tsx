@@ -152,6 +152,7 @@ export default function FounderWorkflowPage() {
             ))}
           </div>
         </div>
+      </section>
     </div>
   );
 }
