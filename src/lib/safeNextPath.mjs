@@ -1,5 +1,6 @@
 export const DEFAULT_NEXT_PATH = "/overview";
 
+const MAX_DECODE_DEPTH = 8;
 const CONTROL_OR_BACKSLASH = /[\u0000-\u001f\u007f-\u009f\\]/u;
 const ENCODED_SEPARATOR = /%(?:2f|5c)/i;
 const VALIDATION_ORIGIN = "https://ksns.invalid";
@@ -8,18 +9,24 @@ function isSingleSlashPath(value) {
   return value.startsWith("/") && !value.startsWith("//");
 }
 
+function isUnsafeLevel(value) {
+  return (
+    !isSingleSlashPath(value) ||
+    CONTROL_OR_BACKSLASH.test(value) ||
+    ENCODED_SEPARATOR.test(value)
+  );
+}
+
 export function safeNextPath(value) {
-  if (typeof value !== "string" || !isSingleSlashPath(value)) {
+  if (typeof value !== "string" || isUnsafeLevel(value)) {
     return DEFAULT_NEXT_PATH;
   }
 
   let decoded = value;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (
-      !isSingleSlashPath(decoded) ||
-      CONTROL_OR_BACKSLASH.test(decoded) ||
-      ENCODED_SEPARATOR.test(decoded)
-    ) {
+  let stabilized = false;
+
+  for (let depth = 0; depth < MAX_DECODE_DEPTH; depth += 1) {
+    if (isUnsafeLevel(decoded)) {
       return DEFAULT_NEXT_PATH;
     }
 
@@ -31,16 +38,13 @@ export function safeNextPath(value) {
     }
 
     if (nextDecoded === decoded) {
+      stabilized = true;
       break;
     }
     decoded = nextDecoded;
   }
 
-  if (
-    !isSingleSlashPath(decoded) ||
-    CONTROL_OR_BACKSLASH.test(decoded) ||
-    ENCODED_SEPARATOR.test(decoded)
-  ) {
+  if (!stabilized || isUnsafeLevel(decoded)) {
     return DEFAULT_NEXT_PATH;
   }
 
