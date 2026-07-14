@@ -11,7 +11,7 @@ const AUTH_COOKIE = "sns_token";
 const PUBLIC_PATHS = ["/login"];
 
 function relativeRedirect(location: string) {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 307,
     headers: { Location: location },
   });
