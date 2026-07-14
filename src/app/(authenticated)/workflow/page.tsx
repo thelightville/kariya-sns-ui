@@ -6,6 +6,7 @@ import {
   FileSearch,
   Fingerprint,
   GitBranch,
+  Globe2,
   LockKeyhole,
   Radar,
   ShieldAlert,
@@ -127,6 +128,30 @@ export default function FounderWorkflowPage() {
         <div className="flex items-center gap-2 text-gray-400"><ShieldCheck className="h-4 w-4" /><h2 className="text-xs font-semibold uppercase tracking-wide">Product reality</h2></div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{workflow.capability_states.map((capability) => <div key={capability.label} className="rounded-xl border border-navy-700/40 bg-navy-950/35 p-4"><span className={`badge ${stateStyle[capability.state] ?? "badge-neutral"}`}>{capability.state}</span><p className="mt-3 text-sm font-medium text-white">{capability.label}</p><p className="mt-2 text-xs leading-5 text-gray-500">{capability.detail}</p></div>)}</div>
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-navy-700/40 bg-navy-950/35 p-4 text-xs leading-5 text-gray-500"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />This view does not call a response system, claim live KAI/KIF/KES/KEA participation, mark an action successful, infer verification, expose the private K-SNS URL, or claim production readiness.</div>
+      </section>
+
+      <section className="card p-5">
+        <div className="flex items-center gap-2 text-sky-400"><Globe2 className="h-4 w-4" /><h2 className="text-xs font-semibold uppercase tracking-wide">Authenticated review readiness</h2></div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-navy-700/40 bg-navy-950/35 p-4">
+            <span className="badge badge-neutral">{workflow.review_access.state}</span>
+            <p className="mt-3 text-sm font-medium text-white">Approved K-SNS origins</p>
+            <p className="mt-2 font-mono text-xs text-gray-400">{workflow.review_access.approved_hosts.join(" · ")}{workflow.review_access.path}</p>
+            <p className="mt-3 text-xs leading-5 text-gray-500">{workflow.review_access.authentication}</p>
+            <p className="mt-2 text-xs leading-5 text-gray-500">{workflow.review_access.backend_boundary}</p>
+            <p className="mt-2 text-xs leading-5 text-amber-300/80">{workflow.review_access.deployment}</p>
+            <p className="mt-2 text-xs leading-5 text-gray-600">{workflow.review_access.review_notes}</p>
+          </div>
+          <div className="space-y-3">
+            {workflow.integration_paths.map((integration) => (
+              <div key={integration.product} className="rounded-xl border border-navy-700/40 bg-navy-950/35 p-4">
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-white">{integration.product} integration path</p><span className="badge badge-neutral">{integration.state}</span></div>
+                <p className="mt-3 text-xs leading-5 text-gray-300">{integration.path}</p>
+                <p className="mt-2 text-xs leading-5 text-gray-500">{integration.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
     </div>
   );
