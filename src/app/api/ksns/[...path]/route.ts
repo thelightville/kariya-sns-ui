@@ -5,9 +5,9 @@ const API_BASE = process.env.K_SNS_BASE_URL ?? "";
 const TENANT_ID = process.env.K_SNS_TENANT_ID ?? "";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     path?: string[];
-  };
+  }>;
 };
 
 const HOP_BY_HOP_HEADERS = new Set([
@@ -67,7 +67,8 @@ async function proxy(request: NextRequest, context: RouteContext) {
     return jsonError("Unauthorized: sign in to K-SNS and try again.", 401);
   }
 
-  const target = buildTargetUrl(request, context.params.path ?? []);
+  const { path = [] } = await context.params;
+  const target = buildTargetUrl(request, path);
   if (!target) {
     return jsonError("K-SNS backend is not configured.", 503);
   }
