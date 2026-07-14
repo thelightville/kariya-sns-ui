@@ -177,6 +177,36 @@ test("CAS preserves identity, version and at-most-once redeem ambiguity", () => 
     () => assertTransactionCas(registered, { ...reserved, state_version: 4 }, 2),
     /version/
   );
+  assert.throws(
+    () =>
+      assertTransactionCas(
+        registered,
+        { ...reserved, normalized_return_path: "/actions" },
+        2
+      ),
+    /identity/
+  );
+  assert.throws(
+    () =>
+      assertTransactionCas(
+        registered,
+        { ...reserved, cloud_expires_at: START + 301 },
+        2
+      ),
+    /300-second|identity/
+  );
+  assert.throws(
+    () =>
+      assertTransactionCas(
+        registered,
+        {
+          ...reserved,
+          envelope: { ...reserved.envelope, kek_key_version: "v2" },
+        },
+        2
+      ),
+    /identity/
+  );
 });
 
 test("reservation cannot outlive Cloud expiry and secrets clear before redeem", () => {
