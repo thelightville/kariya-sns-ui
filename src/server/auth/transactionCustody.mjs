@@ -231,13 +231,17 @@ export function validateTransactionRecord(record) {
     fail("secrets must be cleared before redeem_sent or terminal state");
   }
 
-  if (record.state === "created") {
-    if (
-      record.cloud_request_id_digest !== null ||
-      record.cloud_issued_at !== null ||
-      record.cloud_expires_at !== null
-    ) {
-      fail("created state cannot claim Cloud registration");
+  const cloudAuthorityAbsent =
+    record.cloud_request_id_digest === null &&
+    record.cloud_issued_at === null &&
+    record.cloud_expires_at === null;
+  const unregisteredTerminal =
+    TERMINAL_STATES.has(record.state) &&
+    record.state !== "completed" &&
+    cloudAuthorityAbsent;
+  if (record.state === "created" || unregisteredTerminal) {
+    if (!cloudAuthorityAbsent) {
+      fail("unregistered transaction cannot claim partial Cloud authority");
     }
   } else {
     canonical32(record.cloud_request_id_digest, "cloud_request_id_digest");
