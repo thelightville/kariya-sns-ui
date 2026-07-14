@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CheckCircle2, Clock3, ShieldAlert } from "lucide-react";
+import { Activity, Clock3, ShieldAlert } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { ksnsPlatformClient } from "@/lib/ksnsPlatformClient";
 import { useKsnsQuery } from "@/lib/useKsnsQuery";
