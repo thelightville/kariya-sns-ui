@@ -26,10 +26,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Boundary regression tests
+        run: node --test tests/*.test.mjs
+
       - name: Build (includes type-check)
         run: npm run build
         env:
-          NEXT_PUBLIC_KSNS_API_URL: http://localhost:8000/api/v1
           NEXT_PUBLIC_APP_DOMAIN: sns.kariya.ng
           NEXT_TELEMETRY_DISABLED: "1"
 
