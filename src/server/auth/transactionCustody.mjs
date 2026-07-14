@@ -286,12 +286,28 @@ export function validateTransactionRecord(record) {
 export function assertTransactionCas(current, next, expectedVersion) {
   const before = validateTransactionRecord(current);
   const after = validateTransactionRecord(next);
+  const immutableIdentityMatches =
+    before.id === after.id &&
+    before.schema_version === after.schema_version &&
+    before.region === after.region &&
+    before.state_digest === after.state_digest &&
+    before.normalized_return_path === after.normalized_return_path &&
+    before.created_at === after.created_at;
+  const registeredAuthorityMatches =
+    before.state === "created" ||
+    (before.cloud_request_id_digest === after.cloud_request_id_digest &&
+      before.cloud_issued_at === after.cloud_issued_at &&
+      before.cloud_expires_at === after.cloud_expires_at);
+  const custodialEnvelopeMatches =
+    !CUSTODIAL_STATES.has(after.state) ||
+    JSON.stringify(before.envelope) === JSON.stringify(after.envelope);
   if (
-    before.id !== after.id ||
-    before.region !== after.region ||
-    before.state_digest !== after.state_digest ||
+    !immutableIdentityMatches ||
+    !registeredAuthorityMatches ||
+    !custodialEnvelopeMatches ||
     before.state_version !== expectedVersion ||
-    after.state_version !== expectedVersion + 1
+    after.state_version !== expectedVersion + 1 ||
+    after.updated_at < before.updated_at
   ) {
     fail("transaction CAS identity or version mismatch");
   }
