@@ -118,8 +118,16 @@ test("Cloud preauthorization timestamps are authoritative and exactly 300 second
   );
 });
 
-test("redemption and introspection reject regional crossover and drift", () => {
+test("redemption accepts delayed observation and rejects crossover or time drift", () => {
   assert.equal(validateRedemptionResult(redemption(), "ng", NONCE).region, "ng");
+  assert.equal(
+    validateRedemptionResult(
+      { ...redemption(), server_time: 2_000_000_001 },
+      "ng",
+      NONCE
+    ).server_time,
+    2_000_000_001
+  );
   assert.throws(
     () =>
       validateRedemptionResult(
@@ -133,15 +141,18 @@ test("redemption and introspection reject regional crossover and drift", () => {
     () => validateRedemptionResult(redemption(), "ca", NONCE),
     /crosses/
   );
-  assert.throws(
-    () =>
-      validateRedemptionResult(
-        { ...redemption(), server_time: 2_000_000_001 },
-        "ng",
-        NONCE
-      ),
-    /time authority/
-  );
+  for (const changed of [
+    { expires_at: 2_000_000_898 },
+    { expires_at: 2_000_000_900 },
+    { server_time: 1_999_999_999 },
+    { server_time: 2_000_000_899 },
+    { server_time: 2_000_000_900 },
+  ]) {
+    assert.throws(
+      () => validateRedemptionResult({ ...redemption(), ...changed }, "ng", NONCE),
+      /time authority/
+    );
+  }
 
   assert.equal(validateIntrospectionResult(activeIntrospection(), "ng").active, true);
   assert.throws(
@@ -164,30 +175,25 @@ test("redemption and introspection reject regional crossover and drift", () => {
 test("cookie lifetime is positive min(899, expires_at - server_time)", () => {
   const at = 2_000_000_000;
   assert.equal(
-    calculateSessionCookieMaxAge({ issued_at: at, server_time: at, expires_at: at + 1 }),
-    1
-  );
-  assert.equal(
     calculateSessionCookieMaxAge({ issued_at: at, server_time: at, expires_at: at + 899 }),
     899
   );
   assert.equal(
-    calculateSessionCookieMaxAge({ issued_at: at, server_time: at, expires_at: at + 900 }),
-    899
+    calculateSessionCookieMaxAge({ issued_at: at, server_time: at + 1, expires_at: at + 899 }),
+    898
   );
-  assert.throws(
-    () => calculateSessionCookieMaxAge({ issued_at: at, server_time: at, expires_at: at }),
-    /positive lifetime/
+  assert.equal(
+    calculateSessionCookieMaxAge({ issued_at: at, server_time: at + 898, expires_at: at + 899 }),
+    1
   );
-  assert.throws(
-    () =>
-      calculateSessionCookieMaxAge({
-        issued_at: at,
-        server_time: at + 1,
-        expires_at: at + 899,
-      }),
-    /must match/
-  );
+  for (const invalid of [
+    { issued_at: at, server_time: at, expires_at: at + 898 },
+    { issued_at: at, server_time: at, expires_at: at + 900 },
+    { issued_at: at, server_time: at - 1, expires_at: at + 899 },
+    { issued_at: at, server_time: at + 899, expires_at: at + 899 },
+  ]) {
+    assert.throws(() => calculateSessionCookieMaxAge(invalid), /time profile/);
+  }
   assert.throws(
     () =>
       calculateSessionCookieMaxAge({
