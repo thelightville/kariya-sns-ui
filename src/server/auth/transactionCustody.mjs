@@ -115,11 +115,6 @@ function canonicalBase64url(value, label, { exactBytes, maximumBytes } = {}) {
   return value;
 }
 
-function nullableCanonical32(value, label) {
-  if (value === null) return null;
-  return canonical32(value, label);
-}
-
 export function safeTransactionReturnPath(value) {
   if (
     typeof value !== "string" ||
