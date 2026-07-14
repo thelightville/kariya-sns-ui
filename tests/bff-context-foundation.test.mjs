@@ -70,7 +70,7 @@ test("inactive, cross-country, malformed, missing and extra context fail closed"
   );
 
   const valid = buildBffContext(introspection(), REQUEST_ID);
-  const { "x-kariya-region": _region, ...missing } = valid;
+  const missing = { ...valid };\n  delete missing["x-kariya-region"];
   assert.throws(() => validateBffContext(missing), /exactly/);
   assert.throws(() => validateBffContext({ ...valid, authorization: "Bearer raw" }), /exactly/);
   assert.throws(
