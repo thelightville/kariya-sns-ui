@@ -87,7 +87,7 @@ try {
     assert.equal(response.status, 307, `${pathname}\n${output()}`);
     assert.equal(
       response.headers.get("location"),
-      `${origin}/login?next=${encodeURIComponent(pathname)}`,
+      `/login?next=${encodeURIComponent(pathname)}`,
       pathname
     );
   }
@@ -101,7 +101,7 @@ try {
     assert.equal(response.status, 307, output());
     assert.equal(
       location,
-      `${origin}/login?next=${encodeURIComponent(pathname)}`
+      `/login?next=${encodeURIComponent(pathname)}`
     );
     assert.doesNotMatch(location, /evil\.example|unapproved\.internal|sns\.kariya|console\.kariya/i);
   }
