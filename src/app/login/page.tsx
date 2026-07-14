@@ -4,6 +4,7 @@ import { Shield, Eye, EyeOff } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
+import { safeNextPath } from "@/lib/safeNextPath.mjs";
 
 type LoginPhase = "password" | "mfa";
 
@@ -22,7 +23,7 @@ function LoginForm() {
 
   function completeLogin() {
     setOperator({ email });
-    const next = searchParams.get("next") || "/overview";
+    const next = safeNextPath(searchParams.get("next"));
     router.push(next);
     router.refresh();
   }
