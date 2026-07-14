@@ -45,6 +45,29 @@
     "reason": "The identity remains exposed until an approved response is executed and independently verified.",
     "next_step": "Approve or reject the recommendation, then wait for execution and verification evidence."
   },
+  "review_access": {
+    "state": "source-ready",
+    "path": "/workflow",
+    "approved_hosts": ["sns.kariya.ng", "sns.kariya.ca"],
+    "authentication": "Cloud-owned centralized authentication and session are required.",
+    "backend_boundary": "The browser uses the same-origin /api/ksns BFF only; the raw K-SNS backend remains private.",
+    "deployment": "Unavailable — this source does not claim DNS, routing, credentials, deployment, or production RBAC proof.",
+    "review_notes": "Static product-truth notes only; persistent review-note storage is unavailable."
+  },
+  "integration_paths": [
+    {
+      "product": "KAI",
+      "state": "contract-only",
+      "path": "KAI advisory → K-SNS server-side intake and lifecycle record → same-origin /api/ksns/explanations",
+      "detail": "The browser does not call KAI directly, and no live advisory evidence is represented."
+    },
+    {
+      "product": "KES",
+      "state": "contract-only",
+      "path": "K-SNS /actions → paired regional Console → kes.console-review.v1 posture view",
+      "detail": "Action and incident IDs are non-authoritative lookup hints. Console must re-resolve tenant and role; the handoff does not dispatch, execute, or verify."
+    }
+  ],
   "capability_states": [
     { "label": "Portal and lifecycle presentation", "state": "implemented", "detail": "Rendered inside the existing authenticated K-SNS UI." },
     { "label": "Scenario and evidence values", "state": "synthetic", "detail": "Deterministic, customer-free fixture for founder review." },
