@@ -19,7 +19,12 @@ export function isKesTargetedAction(enforcementSurface) {
 }
 
 export function buildKesConsoleReviewUrl({ hostname, actionId, incidentId }) {
-  const consoleOrigin = KES_CONSOLE_ORIGINS[hostname];
+  const consoleOrigin = Object.prototype.hasOwnProperty.call(
+    KES_CONSOLE_ORIGINS,
+    hostname
+  )
+    ? KES_CONSOLE_ORIGINS[hostname]
+    : null;
   if (
     !consoleOrigin ||
     !isOpaqueLookupHint(actionId) ||
