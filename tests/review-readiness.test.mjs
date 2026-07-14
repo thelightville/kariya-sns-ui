@@ -41,7 +41,7 @@ test("documentation describes Cloud auth and mandatory security sequencing", () 
   assert.match(readme, /relative `Location`/i);
   assert.ok(readme.includes("absolute `http://localhost:3010` login redirect"));
   assert.match(readme, /deployment blocker/i);
-  assert.match(readme, /statically paired `sns\\.kariya\\.ng` or `sns\\.kariya\\.ca` listener/i);
+  assert.ok(readme.includes("statically paired `sns.kariya.ng` or `sns.kariya.ca` listener"));
   assert.match(readme, /Neither K-SNS nor the gateway may select an origin from `Host`/i);
   assert.match(readme, /cross-country and arbitrary-origin redirects fail closed/i);
 });
