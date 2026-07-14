@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import proxyTestingUtils from "next/dist/experimental/testing/server/middleware-testing-utils.js";
 import {
   authenticatedHomeLocation,
   loginRedirectLocation,
 } from "../src/lib/authRedirects.mjs";
 
-const middlewareUrl = new URL("../src/middleware.ts", import.meta.url);
-const middleware = await readFile(middlewareUrl, "utf8");
+const proxyUrl = new URL("../src/proxy.ts", import.meta.url);
+const proxySource = await readFile(proxyUrl, "utf8");
+const { unstable_doesMiddlewareMatch: unstable_doesProxyMatch } =
+  proxyTestingUtils;
+const proxyConfig = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth|api/ksns).*)"],
+};
 
 test("protected routes use only the configured paired SNS origin", () => {
   const cases = [
@@ -76,12 +82,46 @@ test("unsafe next destinations fall back under the same trusted origin", () => {
   }
 });
 
-test("middleware never derives redirect origins from request metadata", () => {
-  assert.match(middleware, /process\.env\.KARIYA_SNS_PUBLIC_ORIGIN/);
-  assert.match(middleware, /loginRedirectLocation\(pathname, CONFIGURED_ORIGIN/);
-  assert.doesNotMatch(middleware, /new URL\(|request\.url/);
+test("Proxy never derives redirect origins from request metadata", () => {
+  assert.match(proxySource, /export function proxy\(/);
+  assert.doesNotMatch(proxySource, /export function middleware\(/);
+  assert.match(proxySource, /process\.env\.KARIYA_SNS_PUBLIC_ORIGIN/);
+  assert.match(proxySource, /loginRedirectLocation\(pathname, CONFIGURED_ORIGIN/);
+  assert.doesNotMatch(proxySource, /new URL\(|request\.url/);
   assert.doesNotMatch(
-    middleware,
+    proxySource,
     /["'](?:X-Forwarded-Host|X-Forwarded-Proto|Forwarded|Origin|Referer|return_to)["']|headers\.get|request\.headers/i
   );
+});
+
+test("Proxy matcher preserves protected-route and BFF exclusions", () => {
+  for (const url of [
+    "/",
+    "/login",
+    "/workflow",
+    "/actions",
+    "/incidents",
+    "/overview",
+  ]) {
+    assert.equal(
+      unstable_doesProxyMatch({ config: proxyConfig, nextConfig: {}, url }),
+      true,
+      `expected Proxy match for ${url}`
+    );
+  }
+
+  for (const url of [
+    "/_next/static/chunks/app.js",
+    "/_next/image",
+    "/favicon.ico",
+    "/api/auth/login",
+    "/api/auth/mfa",
+    "/api/ksns/events",
+  ]) {
+    assert.equal(
+      unstable_doesProxyMatch({ config: proxyConfig, nextConfig: {}, url }),
+      false,
+      `expected Proxy exclusion for ${url}`
+    );
+  }
 });
