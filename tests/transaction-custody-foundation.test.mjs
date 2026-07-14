@@ -233,6 +233,26 @@ test("terminal records enforce exact 24-hour replay tombstones", () => {
     () => validateTransactionRecord({ ...terminal, purge_after: terminal.purge_after - 1 }),
     /24 hours/
   );
+
+  const created = record("created", 1);
+  const expiredBeforeRegistration = {
+    ...record("expired", 2),
+    cloud_request_id_digest: null,
+    cloud_issued_at: null,
+    cloud_expires_at: null,
+  };
+  assert.equal(
+    assertTransactionCas(created, expiredBeforeRegistration, 1).state,
+    "expired"
+  );
+  assert.throws(
+    () =>
+      validateTransactionRecord({
+        ...expiredBeforeRegistration,
+        cloud_issued_at: START,
+      }),
+    /partial Cloud authority/
+  );
 });
 
 test("PostgreSQL, cipher and KMS ports have only generic unavailable behavior", async () => {
