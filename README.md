@@ -26,6 +26,7 @@ Console remains the canonical unified product portal:
 K-SNS UI can exist as a dedicated SOC/security-operations surface, but it must not replace Console as the primary product entry point. Console should deep-link into K-SNS for:
 
 - `/overview` — K-SNS dashboard
+- `/workflow` — synthetic, customer-free security workflow and product-truth review notes
 - `/incidents` and `/incidents/{incidentId}` — incident list/detail
 - `/actions` — autonomous action lifecycle
 - `/trust` — trust/risk posture
@@ -73,7 +74,7 @@ Primary product portals:
 - `console.kariya.ca`
 - `console.kariya.ng`
 
-Dedicated K-SNS SOC surface, if retained:
+Approved dedicated K-SNS SOC surfaces (source contract only; not a deployment claim):
 
 - `sns.kariya.ca`
 - `sns.kariya.ng`
@@ -113,7 +114,29 @@ npm run dev
 
 The dev server starts on `http://localhost:3010`.
 
-Alpha 1 login is a local stub: any email/password combination succeeds and sets the `sns_token` httpOnly cookie. Live auth is still a backend dependency.
+Login and MFA are proxied server-side to the Cloud-owned authentication service configured by `KARIYA_CLOUD_AUTH_BASE_URL`. A successful Cloud response supplies the access token stored in the `sns_token` httpOnly cookie. When Cloud auth is not configured or unavailable, login fails closed; there is no local credential bypass.
+
+## Founder Review Source Readiness
+
+Both approved K-SNS origins serve the same authenticated product routes:
+
+- `https://sns.kariya.ng/workflow`
+- `https://sns.kariya.ca/workflow`
+
+The browser calls only same-origin `/api/auth/*` and `/api/ksns/*` routes. Cloud owns centralized authentication/session contracts, tenant and role authority, regional routing, and any persistent review-note storage. This repository stores no credentials or review notes and does not expose the raw K-SNS backend.
+
+The minimum cross-product journey is intentionally narrow:
+
+- KAI advisory content reaches K-SNS through a future server-side contract and K-SNS lifecycle record; the UI reads K-SNS-owned explanation data through `/api/ksns/explanations`. The browser never calls KAI directly.
+- A KES-targeted K-SNS action may link from authenticated `/actions` to the paired regional Console `/products/kes/response-orchestration` view using `kes.console-review.v1`. Action and incident IDs are lookup hints only; Cloud must re-resolve them under tenant/role authority. The link is posture review only and does not dispatch, execute, or verify.
+
+Deployment sequencing is mandatory even when this source branch is green:
+
+1. PR #10 boundary hardening is the deployment prerequisite.
+2. PR #8/#9 must be rebased and revalidated on the exact accepted post-#10 base.
+3. This stacked slice must then be rebased onto that combined accepted head and fully revalidated.
+
+No merge, deployment, DNS/routing change, Cloud session/RBAC implementation, KES execution, or production-readiness claim is included here.
 
 ## Checks
 
