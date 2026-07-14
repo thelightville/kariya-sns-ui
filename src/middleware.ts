@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  AUTHENTICATED_HOME_PATH,
+  authenticatedHomeLocation,
   loginRedirectLocation,
 } from "@/lib/authRedirects.mjs";
 
@@ -10,11 +10,17 @@ const AUTH_COOKIE = "sns_token";
 // Public paths that never require authentication.
 const PUBLIC_PATHS = ["/login"];
 
-function relativeRedirect(location: string) {
-  return new Response(null, {
-    status: 307,
-    headers: { Location: location },
-  });
+const CONFIGURED_ORIGIN = process.env.KARIYA_SNS_PUBLIC_ORIGIN;
+const ALLOW_LOOPBACK_ORIGIN =
+  process.env.KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN === "1";
+
+function trustedRedirect(location: string | null) {
+  if (!location) {
+    return new NextResponse("K-SNS authentication redirect is unavailable.", {
+      status: 503,
+    });
+  }
+  return NextResponse.redirect(location, 307);
 }
 
 export function middleware(request: NextRequest) {
@@ -25,11 +31,19 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
 
   if (!isPublic && !token) {
-    return relativeRedirect(loginRedirectLocation(pathname));
+    return trustedRedirect(
+      loginRedirectLocation(pathname, CONFIGURED_ORIGIN, {
+        allowLoopback: ALLOW_LOOPBACK_ORIGIN,
+      })
+    );
   }
 
   if (isPublic && token) {
-    return relativeRedirect(AUTHENTICATED_HOME_PATH);
+    return trustedRedirect(
+      authenticatedHomeLocation(CONFIGURED_ORIGIN, {
+        allowLoopback: ALLOW_LOOPBACK_ORIGIN,
+      })
+    );
   }
 
   return NextResponse.next();
