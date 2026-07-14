@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -23,6 +23,28 @@ for (const file of walk(sourceDir)) {
   const text = readFileSync(file, "utf8");
   if (text.includes("NEXT_PUBLIC_KSNS_API_URL")) {
     failures.push(`${file}: NEXT_PUBLIC_KSNS_API_URL must not be used`);
+  }
+}
+
+const staticDir = join(root, ".next", "static");
+const forbiddenClientMarkers = [
+  "NEXT_PUBLIC_KSNS_API_URL",
+  "K_SNS_BASE_URL",
+  "K_SNS_TENANT_ID",
+  "KARIYA_CLOUD_AUTH_BASE_URL",
+  "alpha1-stub-session",
+];
+
+if (!existsSync(staticDir)) {
+  failures.push("built client bundle is required before public-bff verification");
+} else {
+  for (const file of walk(staticDir)) {
+    const text = readFileSync(file, "utf8");
+    for (const marker of forbiddenClientMarkers) {
+      if (text.includes(marker)) {
+        failures.push(`${file}: forbidden client marker ${marker}`);
+      }
+    }
   }
 }
 

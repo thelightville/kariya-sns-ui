@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildBffHeaders } from "@/lib/bffHeaders.mjs";
 
 const AUTH_COOKIE = "sns_token";
 const API_BASE = process.env.K_SNS_BASE_URL ?? "";
@@ -10,18 +11,6 @@ type RouteContext = {
   };
 };
 
-const HOP_BY_HOP_HEADERS = new Set([
-  "connection",
-  "content-length",
-  "host",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-]);
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -43,24 +32,6 @@ function buildTargetUrl(request: NextRequest, path: string[]) {
   return target;
 }
 
-function buildHeaders(request: NextRequest, token: string) {
-  const headers = new Headers();
-
-  request.headers.forEach((value, key) => {
-    const lower = key.toLowerCase();
-    if (!HOP_BY_HOP_HEADERS.has(lower) && lower !== "cookie") {
-      headers.set(key, value);
-    }
-  });
-
-  headers.set("Authorization", `Bearer ${token}`);
-  if (TENANT_ID && !headers.has("X-Tenant-ID")) {
-    headers.set("X-Tenant-ID", TENANT_ID);
-  }
-
-  return headers;
-}
-
 async function proxy(request: NextRequest, context: RouteContext) {
   const token = request.cookies.get(AUTH_COOKIE)?.value;
   if (!token) {
@@ -74,7 +45,7 @@ async function proxy(request: NextRequest, context: RouteContext) {
 
   const method = request.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
-  const headers = buildHeaders(request, token);
+  const headers = buildBffHeaders(request.headers, token, TENANT_ID);
 
   let upstream: Response;
   try {
