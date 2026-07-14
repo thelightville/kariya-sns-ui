@@ -10,13 +10,37 @@ export class FoundationUnavailableError extends Error {
 }
 
 /**
+ * Future PostgreSQL correctness boundary. No implementation is supplied here.
+ * Every mutating operation must use row locking and state-version CAS.
+ *
  * @typedef {object} TransactionStore
  * @property {(record: unknown) => Promise<never>} create
- * @property {(state: string) => Promise<never>} reserveCallback
- * @property {(id: string) => Promise<never>} markRedeemSent
- * @property {(id: string) => Promise<never>} complete
- * @property {(id: string) => Promise<never>} fail
- * @property {(id: string) => Promise<never>} expire
+ * @property {(id: string, expectedVersion: number, registration: unknown) => Promise<never>} markRegistered
+ * @property {(stateDigest: string, reservation: unknown) => Promise<never>} reserveCallback
+ * @property {(id: string, expectedVersion: number, reservationDigest: string) => Promise<never>} releaseReservation
+ * @property {(id: string, expectedVersion: number, reservationDigest: string) => Promise<never>} markRedeemSent
+ * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<never>} complete
+ * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<never>} failTerminal
+ * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<never>} expire
+ * @property {(now: number) => Promise<never>} purgeTerminal
+ */
+
+/**
+ * Pure transaction-envelope boundary. A future implementation may perform
+ * AES-256-GCM only after an authorized key provider is available.
+ *
+ * @typedef {object} TransactionCipher
+ * @property {(plaintext: unknown, aad: string, keyReference: unknown) => Promise<never>} seal
+ * @property {(envelope: unknown, aad: string) => Promise<never>} open
+ */
+
+/**
+ * Future regional KMS/HSM boundary. Key material must never be returned.
+ *
+ * @typedef {object} KeyEncryptionProvider
+ * @property {() => Promise<never>} currentKeyReference
+ * @property {(dataKey: unknown, keyReference: unknown) => Promise<never>} wrapKey
+ * @property {(wrappedKey: unknown, keyReference: unknown) => Promise<never>} unwrapKey
  */
 
 /**
@@ -42,11 +66,31 @@ function unavailable(capability) {
 export function unavailableTransactionStore() {
   return Object.freeze({
     create: unavailable("transaction_store.create"),
+    markRegistered: unavailable("transaction_store.mark_registered"),
     reserveCallback: unavailable("transaction_store.reserve_callback"),
+    releaseReservation: unavailable("transaction_store.release_reservation"),
     markRedeemSent: unavailable("transaction_store.mark_redeem_sent"),
     complete: unavailable("transaction_store.complete"),
-    fail: unavailable("transaction_store.fail"),
+    failTerminal: unavailable("transaction_store.fail_terminal"),
     expire: unavailable("transaction_store.expire"),
+    purgeTerminal: unavailable("transaction_store.purge_terminal"),
+  });
+}
+
+/** @returns {TransactionCipher} */
+export function unavailableTransactionCipher() {
+  return Object.freeze({
+    seal: unavailable("transaction_cipher.seal"),
+    open: unavailable("transaction_cipher.open"),
+  });
+}
+
+/** @returns {KeyEncryptionProvider} */
+export function unavailableKeyEncryptionProvider() {
+  return Object.freeze({
+    currentKeyReference: unavailable("key_encryption.current_reference"),
+    wrapKey: unavailable("key_encryption.wrap"),
+    unwrapKey: unavailable("key_encryption.unwrap"),
   });
 }
 
