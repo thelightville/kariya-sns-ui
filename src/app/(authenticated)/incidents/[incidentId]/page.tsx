@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- normalizes versioned backend evidence payloads */
 "use client";
 
 import Link from "next/link";

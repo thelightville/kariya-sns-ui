@@ -20,6 +20,8 @@ export function useKsnsQuery<T>(fetcher: () => Promise<T>, deps: unknown[] = [])
 
   useEffect(() => {
     let cancelled = false;
+    // Dependency changes intentionally re-enter the explicit loading state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState({ status: "loading", data: null, error: null });
 
     fetcher()

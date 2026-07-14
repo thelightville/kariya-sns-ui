@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- adapter normalizes multiple backend contract revisions */
 /**
  * ksnsPlatformClient — typed fetch client for the K-SNS C-009 and Alpha 1 lifecycle APIs.
  *
