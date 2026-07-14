@@ -94,6 +94,8 @@ See [`.env.example`](.env.example).
 |---|---|
 | `K_SNS_BASE_URL` | Server-side K-SNS API base URL used only by `/api/ksns/*`. Never expose it as `NEXT_PUBLIC_*`. |
 | `K_SNS_TENANT_ID` | Optional server-side tenant header forwarded by the BFF where needed. |
+| `KARIYA_SNS_PUBLIC_ORIGIN` | Server-only canonical auth-redirect origin. Production accepts only the exact regional `https://sns.kariya.ng` or `https://sns.kariya.ca` origin. |
+| `KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN` | Local-evidence gate only. Must remain disabled for every `sns.*` deployment. |
 | `NEXT_PUBLIC_KSNS_TENANT_ID` | Non-secret Alpha 1 tenant hint for tenant-scoped module routes. Leave blank to show unavailable state. |
 | `NEXT_PUBLIC_KSNS_OPERATOR_ID` | Non-secret operator identifier for approval/request payloads where required. |
 | `NEXT_PUBLIC_APP_DOMAIN` | Public K-SNS surface, usually `sns.kariya.ca` or `sns.kariya.ng`. |
@@ -125,7 +127,7 @@ Both approved K-SNS origins serve the same authenticated product routes:
 
 The browser calls only same-origin `/api/auth/*` and `/api/ksns/*` routes. Cloud owns centralized authentication/session contracts, tenant and role authority, regional routing, and any persistent review-note storage. This repository stores no credentials or review notes and does not expose the raw K-SNS backend.
 
-Authenticated route redirects should emit a relative `Location`, for example `/login?next=%2Fworkflow`, so the browser retains the approved external origin. The current founder-review process instead emits an absolute `http://localhost:3010` login redirect; that is a deployment blocker, not `sns.*` readiness evidence. Until the source redirect is corrected, Cloud may rewrite only an exact configured loopback-upstream origin to its statically paired `sns.kariya.ng` or `sns.kariya.ca` listener. Neither K-SNS nor the gateway may select an origin from `Host`, `X-Forwarded-Host`, `Forwarded`, `Origin`, `Referer`, query parameters, or `return_to`; cross-country and arbitrary-origin redirects fail closed.
+Next 16 requires middleware redirects to carry an absolute URL, so this integration uses the server-only `KARIYA_SNS_PUBLIC_ORIGIN` instead of request metadata. Production accepts exactly `https://sns.kariya.ng` or `https://sns.kariya.ca`; missing or invalid configuration fails closed with 503. A separately gated explicit `http://127.0.0.1:<port>` origin exists only for local evidence and Cloud's exact configured loopback-upstream rewrite contract; it is not `sns.*` readiness evidence and must not be enabled in an `sns.*` deployment. Neither K-SNS nor the gateway may select an origin from `Host`, `X-Forwarded-Host`, `Forwarded`, `Origin`, `Referer`, query parameters, or `return_to`; cross-country and arbitrary-origin redirects fail closed.
 
 The minimum cross-product journey is intentionally narrow:
 
