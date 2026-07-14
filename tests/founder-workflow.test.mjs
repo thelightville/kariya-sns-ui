@@ -29,7 +29,7 @@ test("unexecuted work cannot appear verified or contained", () => {
 
 test("capability inventory separates contract availability from live evidence", () => {
   const states = new Set(workflow.capability_states.map(({ state }) => state));
-  assert.deepEqual(states, new Set(["implemented", "synthetic", "available", "unavailable"]));
+  assert.deepEqual(states, new Set(["implemented", "synthetic", "contract-only", "unavailable"]));
   assert.match(
     workflow.capability_states.find(({ label }) => label.includes("KAI"))?.detail ?? "",
     /no live cross-product evidence/i
