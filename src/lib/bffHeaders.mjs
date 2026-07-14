@@ -1,6 +1,10 @@
 const FORWARDED_REQUEST_HEADERS = ["accept", "content-type"];
 
 export function buildBffHeaders(inboundHeaders, sessionToken, trustedTenantId = "") {
+  if (typeof sessionToken !== "string" || sessionToken.length === 0) {
+    throw new TypeError("A server-owned session token is required");
+  }
+
   const headers = new Headers();
 
   for (const name of FORWARDED_REQUEST_HEADERS) {
