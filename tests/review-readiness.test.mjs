@@ -38,4 +38,9 @@ test("documentation describes Cloud auth and mandatory security sequencing", () 
   assert.match(readme, /KARIYA_CLOUD_AUTH_BASE_URL/);
   assert.match(readme, /PR #10/);
   assert.match(readme, /deployment prerequisite/i);
+  assert.match(readme, /relative `Location`/i);
+  assert.match(readme, /absolute `http:\\/\\/localhost:3010` login redirect.*deployment blocker/i);
+  assert.match(readme, /statically paired `sns\\.kariya\\.ng` or `sns\\.kariya\\.ca` listener/i);
+  assert.match(readme, /Neither K-SNS nor the gateway may select an origin from `Host`/i);
+  assert.match(readme, /cross-country and arbitrary-origin redirects fail closed/i);
 });
