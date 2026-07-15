@@ -1,6 +1,7 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { request as httpsRequest } from "node:https";
 import { Agent } from "node:https";
+import { checkServerIdentity } from "node:tls";
 import { createPrivateKey, X509Certificate } from "node:crypto";
 
 import { productionRegionDefinition } from "./productionConfig.mjs";
@@ -59,6 +60,24 @@ export function loadProtectedMtlsMaterial(config) {
   return Object.freeze({ cert, key, ca, crl });
 }
 
+export function validateCloudServerIdentity(
+  hostname,
+  certificate,
+  expectedServerName,
+  defaultValidator = checkServerIdentity
+) {
+  if (hostname !== expectedServerName) return new Error("cloud_authority_unavailable");
+  const standardError = defaultValidator(hostname, certificate);
+  if (standardError) return standardError;
+  const sans = (certificate.subjectaltname ?? "")
+    .split(/,\s*/u)
+    .filter(Boolean);
+  if (sans.length !== 1 || sans[0] !== `DNS:${expectedServerName}`) {
+    return new Error("cloud_authority_unavailable");
+  }
+  return undefined;
+}
+
 export function parseCloudResponse(
   { statusCode, headers = {}, body },
   responseMode
@@ -98,7 +117,7 @@ function requestJson(
   responseMode = "json"
 ) {
   const target = new URL(url);
-  if (target.protocol !== "https:" || target.origin !== config.cloud_origin) fail();
+  if (target.protocol !== "https:" || target.origin !== config.transport_origin) fail();
   const encoded = Buffer.from(JSON.stringify(body), "utf8");
   if (encoded.length > config.response_max_bytes) fail();
   const material = materialLoader(config);
@@ -109,6 +128,8 @@ function requestJson(
     rejectUnauthorized: true,
     keepAlive: false,
     maxCachedSessions: 0,
+    checkServerIdentity: (hostname, certificate) =>
+      validateCloudServerIdentity(hostname, certificate, config.tls_server_name),
   });
 
   return new Promise((resolve, reject) => {
@@ -117,7 +138,7 @@ function requestJson(
       {
         method: "POST",
         agent,
-        servername: target.hostname,
+        servername: config.tls_server_name,
         headers: {
           accept: "application/json",
           "content-type": "application/json",
@@ -167,7 +188,10 @@ export function createCloudMtlsClient(
   { transport = requestJson, materialLoader = loadProtectedMtlsMaterial } = {}
 ) {
   const definition = productionRegionDefinition(config.region);
-  if (config.cloud_origin !== definition.cloud_origin) fail();
+  if (
+    config.cloud_origin !== definition.cloud_origin ||
+    config.tls_server_name !== definition.cloud_server_name
+  ) fail();
   const call = async (operation, body) => {
     const endpoint = config.endpoints[operation];
     if (typeof endpoint !== "string") fail();
