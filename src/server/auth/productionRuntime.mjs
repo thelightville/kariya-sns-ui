@@ -3,7 +3,6 @@ import { createNodePostgresPool, assertAuthSchemaHead } from "./nodePostgresPool
 import { createPostgresTransactionStore } from "./postgresTransactionStore.mjs";
 import { createRegionalEnvelopeKeyProvider } from "./regionalEnvelopeKeyProvider.mjs";
 import { createAesGcmTransactionCipher } from "./transactionCrypto.mjs";
-import { createAuthRuntime } from "./runtimeComposition.mjs";
 
 function gatedPort(ready, target, methods) {
   return Object.freeze(
@@ -28,8 +27,12 @@ export function createProductionAuthComposition(
       keyResource: config.kms_key_resource,
     }),
     cloud = createCloudMtlsClient(config),
+    runtimeFactory,
   } = {}
 ) {
+  if (typeof runtimeFactory !== "function") {
+    throw new TypeError("runtime factory is required");
+  }
   const store = createPostgresTransactionStore(pool);
   const cipher = createAesGcmTransactionCipher(keyProvider);
   const ready = Promise.all([
@@ -57,7 +60,7 @@ export function createProductionAuthComposition(
     "logout",
   ]);
   const introspector = gatedPort(ready, cloud, ["introspect"]);
-  const runtime = createAuthRuntime({
+  const runtime = runtimeFactory({
     store: gatedStore,
     cipher: gatedCipher,
     cloud: gatedCloud,
