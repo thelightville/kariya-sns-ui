@@ -59,7 +59,44 @@ export function loadProtectedMtlsMaterial(config) {
   return Object.freeze({ cert, key, ca, crl });
 }
 
-function requestJson(url, body, config, materialLoader = loadProtectedMtlsMaterial) {
+export function parseCloudResponse(
+  { statusCode, headers = {}, body },
+  responseMode
+) {
+  if (!Number.isSafeInteger(statusCode) || !Buffer.isBuffer(body)) fail();
+  if (responseMode === "empty") {
+    if (
+      statusCode !== 204 ||
+      body.length !== 0 ||
+      headers["content-length"] !== undefined ||
+      headers["transfer-encoding"] !== undefined
+    ) {
+      fail();
+    }
+    return undefined;
+  }
+  if (responseMode !== "json" || statusCode !== 200 || body.length === 0) fail();
+  const contentType = headers["content-type"];
+  if (
+    typeof contentType !== "string" ||
+    !/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/iu.test(contentType)
+  ) {
+    fail();
+  }
+  try {
+    return JSON.parse(body.toString("utf8"));
+  } catch {
+    fail();
+  }
+}
+
+function requestJson(
+  url,
+  body,
+  config,
+  materialLoader = loadProtectedMtlsMaterial,
+  responseMode = "json"
+) {
   const target = new URL(url);
   if (target.protocol !== "https:" || target.origin !== config.cloud_origin) fail();
   const encoded = Buffer.from(JSON.stringify(body), "utf8");
@@ -99,12 +136,17 @@ function requestJson(url, body, config, materialLoader = loadProtectedMtlsMateri
         });
         response.on("end", () => {
           agent.destroy();
-          if (response.statusCode < 200 || response.statusCode >= 300) {
-            reject(new Error("cloud_authority_unavailable"));
-            return;
-          }
           try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+            resolve(
+              parseCloudResponse(
+                {
+                  statusCode: response.statusCode,
+                  headers: response.headers,
+                  body: Buffer.concat(chunks),
+                },
+                responseMode
+              )
+            );
           } catch {
             reject(new Error("cloud_authority_unavailable"));
           }
@@ -129,7 +171,10 @@ export function createCloudMtlsClient(
   const call = async (operation, body) => {
     const endpoint = config.endpoints[operation];
     if (typeof endpoint !== "string") fail();
-    return transport(endpoint, body, config, materialLoader);
+    const responseMode = new Set(["revoke", "logout"]).has(operation)
+      ? "empty"
+      : "json";
+    return transport(endpoint, body, config, materialLoader, responseMode);
   };
   return Object.freeze({
     register: (body) => call("register", body),
