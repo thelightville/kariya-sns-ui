@@ -10,50 +10,49 @@ export class FoundationUnavailableError extends Error {
 }
 
 /**
- * Future PostgreSQL correctness boundary. No implementation is supplied here.
- * Every mutating operation must use row locking and state-version CAS.
+ * PostgreSQL correctness boundary. Implementations must use row locking and
+ * state-version compare-and-swap; Redis is never a correctness authority.
  *
  * @typedef {object} TransactionStore
- * @property {(record: unknown) => Promise<never>} create
- * @property {(id: string, expectedVersion: number, registration: unknown) => Promise<never>} markRegistered
- * @property {(stateDigest: string, reservation: unknown) => Promise<never>} reserveCallback
- * @property {(id: string, expectedVersion: number, reservationDigest: string) => Promise<never>} releaseReservation
- * @property {(id: string, expectedVersion: number, reservationDigest: string) => Promise<never>} markRedeemSent
- * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<never>} complete
- * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<never>} failTerminal
- * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<never>} expire
- * @property {(now: number) => Promise<never>} purgeTerminal
+ * @property {(record: unknown) => Promise<unknown>} create
+ * @property {(id: string, expectedVersion: number, registration: unknown) => Promise<unknown>} markRegistered
+ * @property {(stateDigest: string, reservation: unknown) => Promise<unknown>} reserveCallback
+ * @property {(id: string, expectedVersion: number, reservationDigest: string, update: unknown) => Promise<unknown>} releaseReservation
+ * @property {(id: string, expectedVersion: number, reservationDigest: string, update: unknown) => Promise<unknown>} markRedeemSent
+ * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<unknown>} complete
+ * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<unknown>} failTerminal
+ * @property {(id: string, expectedVersion: number, terminal: unknown) => Promise<unknown>} expire
+ * @property {(now: number) => Promise<number>} purgeTerminal
  */
 
 /**
- * Pure transaction-envelope boundary. A future implementation may perform
- * AES-256-GCM only after an authorized key provider is available.
- *
+ * AES-256-GCM transaction-envelope boundary.
  * @typedef {object} TransactionCipher
- * @property {(plaintext: unknown, aad: string, keyReference: unknown) => Promise<never>} seal
- * @property {(envelope: unknown, aad: string) => Promise<never>} open
+ * @property {(plaintext: unknown, aad: string) => Promise<unknown>} seal
+ * @property {(envelope: unknown, aad: string) => Promise<unknown>} open
  */
 
 /**
- * Future regional KMS/HSM boundary. Key material must never be returned.
- *
+ * Regional KMS/HSM boundary. Plaintext wrapping keys must never be returned.
  * @typedef {object} KeyEncryptionProvider
- * @property {() => Promise<never>} currentKeyReference
- * @property {(dataKey: unknown, keyReference: unknown) => Promise<never>} wrapKey
- * @property {(wrappedKey: unknown, keyReference: unknown) => Promise<never>} unwrapKey
+ * @property {() => Promise<{key_id: string, key_version: string}>} currentKeyReference
+ * @property {(dataKey: Uint8Array, keyReference: unknown) => Promise<Uint8Array>} wrapKey
+ * @property {(wrappedKey: Uint8Array, keyReference: unknown) => Promise<Uint8Array>} unwrapKey
  */
 
 /**
+ * Mutually authenticated K-SNS-to-Cloud boundary.
  * @typedef {object} CloudExchangeClient
- * @property {(request: unknown) => Promise<never>} register
- * @property {(request: unknown) => Promise<never>} redeem
- * @property {(request: unknown) => Promise<never>} revoke
- * @property {(request: unknown) => Promise<never>} logout
+ * @property {(request: unknown) => Promise<unknown>} register
+ * @property {(request: unknown) => Promise<unknown>} redeem
+ * @property {(request: unknown) => Promise<void>} revoke
+ * @property {(request: unknown) => Promise<void>} logout
  */
 
 /**
+ * Every protected UI and BFF request invokes this port. No stale-success cache.
  * @typedef {object} SessionIntrospector
- * @property {(sessionHandle: string) => Promise<never>} introspect
+ * @property {(request: unknown) => Promise<unknown>} introspect
  */
 
 function unavailable(capability) {
