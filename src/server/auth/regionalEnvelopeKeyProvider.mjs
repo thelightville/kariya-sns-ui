@@ -56,18 +56,20 @@ function canonicalWrapContext(reference, context) {
   );
 }
 
-function assertCredentialMetadata(directory, path, fs) {
+function assertCredentialMetadata(directory, path, fs, expectedUid) {
   if (!isAbsolute(directory)) fail();
   const directoryMetadata = fs.statSync(directory);
   const linkMetadata = fs.lstatSync(path);
   const fileMetadata = fs.statSync(path);
   if (
+    !Number.isSafeInteger(expectedUid) ||
+    expectedUid < 1 ||
     !directoryMetadata.isDirectory() ||
-    directoryMetadata.uid !== 0 ||
+    directoryMetadata.uid !== expectedUid ||
     (directoryMetadata.mode & 0o077) !== 0 ||
     linkMetadata.isSymbolicLink() ||
     !fileMetadata.isFile() ||
-    fileMetadata.uid !== 0 ||
+    fileMetadata.uid !== expectedUid ||
     (fileMetadata.mode & 0o777) !== 0o400 ||
     fileMetadata.size !== 32
   ) {
@@ -75,9 +77,9 @@ function assertCredentialMetadata(directory, path, fs) {
   }
 }
 
-function loadCredential(directory, credentialName, metadata, fs) {
+function loadCredential(directory, credentialName, metadata, fs, expectedUid) {
   const path = join(directory, credentialName);
-  assertCredentialMetadata(directory, path, fs);
+  assertCredentialMetadata(directory, path, fs, expectedUid);
   const plaintext = fs.readFileSync(path);
   if (!Buffer.isBuffer(plaintext) || plaintext.length !== 32) fail();
   try {
@@ -100,6 +102,7 @@ export function createRegionalEnvelopeKeyProvider(
   {
     fs = { lstatSync, readFileSync, statSync },
     random = randomBytes,
+    expectedUid = typeof process.getuid === "function" ? process.getuid() : null,
   } = {}
 ) {
   productionRegionDefinition(region);
@@ -119,7 +122,8 @@ export function createRegionalEnvelopeKeyProvider(
       credentialDirectory,
       SYSTEMD_CURRENT_CREDENTIAL,
       { region, key_id: keyId, key_version: currentVersion },
-      fs
+      fs,
+      expectedUid
     ),
   ];
   if (previousVersion !== null) {
@@ -128,7 +132,8 @@ export function createRegionalEnvelopeKeyProvider(
         credentialDirectory,
         SYSTEMD_PREVIOUS_CREDENTIAL,
         { region, key_id: keyId, key_version: previousVersion },
-        fs
+        fs,
+        expectedUid
       )
     );
   }
