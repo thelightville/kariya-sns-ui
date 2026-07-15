@@ -33,6 +33,7 @@ const forbiddenClientMarkers = [
   "K_SNS_TRANSACTION_KMS_KEY_RESOURCE",
   "K_SNS_CLOUD_CLIENT_KEY_PATH",
   "K_SNS_CLOUD_CA_BUNDLE_PATH",
+  "K_SNS_GCP_WIF_CONFIG_PATH",
   "alpha1-stub-session",
 ];
 
