@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { request as httpsRequest } from "node:https";
 import { Agent } from "node:https";
 import { createPrivateKey, X509Certificate } from "node:crypto";
@@ -9,8 +9,11 @@ function fail() {
   throw new Error("cloud_auth_runtime_unavailable");
 }
 
-function readProtected(path) {
+function readProtected(path, { privateKey = false } = {}) {
   try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) fail();
+    if (privateKey && process.platform !== "win32" && (stat.mode & 0o077) !== 0) fail();
     return readFileSync(path);
   } catch {
     fail();
@@ -28,8 +31,16 @@ function validateClientIdentity(cert, key, region) {
     if (sans.length !== 1 || sans[0] !== `URI:${definition.spiffe_uri}`) fail();
     if (
       parsed.ca ||
+      /(?:^|\\n)CN=/u.test(parsed.subject) ||
+      /(?:^|,\\s*)DNS:/u.test(parsed.subjectAltName ?? "") ||
       parsed.publicKey.asymmetricKeyType !== "ec" ||
-      parsed.publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1"
+      parsed.publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
+      !Array.isArray(parsed.keyUsage) ||
+      parsed.keyUsage.length !== 1 ||
+      parsed.keyUsage[0] !== "1.3.6.1.5.5.7.3.2" ||
+      parsed.validToDate.getTime() - parsed.validFromDate.getTime() > 2_592_000_000 ||
+      Date.now() < parsed.validFromDate.getTime() ||
+      Date.now() >= parsed.validToDate.getTime()
     ) {
       fail();
     }
@@ -40,7 +51,7 @@ function validateClientIdentity(cert, key, region) {
 
 export function loadProtectedMtlsMaterial(config) {
   const cert = readProtected(config.client_certificate_path);
-  const key = readProtected(config.client_private_key_path);
+  const key = readProtected(config.client_private_key_path, { privateKey: true });
   const ca = readProtected(config.cloud_ca_bundle_path);
   const crl = readProtected(config.cloud_crl_path);
   validateClientIdentity(cert, key, config.region);
