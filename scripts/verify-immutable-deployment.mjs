@@ -30,6 +30,8 @@ for (const marker of [
   "LoadCredentialEncrypted",
   "K_SNS_CLOUD_CLIENT_CERT_PATH",
   "K_SNS_CLOUD_CLIENT_KEY_PATH",
+  "K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN",
+  "K_SNS_CLOUD_MTLS_SERVER_NAME",
   "org.opencontainers.image.revision",
   ".rollback",
   "prior image digest restored",
