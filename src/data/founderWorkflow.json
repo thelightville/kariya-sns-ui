@@ -1,0 +1,79 @@
+{
+  "scenario_id": "ksns-synthetic-identity-001",
+  "title": "Unusual sign-in becomes an incident candidate",
+  "summary": "A customer-free identity event moves through the K-SNS security workflow without claiming live telemetry, dispatch, containment, or verification.",
+  "provenance": "synthetic",
+  "event": {
+    "event_id": "evt-syn-identity-001",
+    "source": "Synthetic identity fixture",
+    "type": "identity.risky_sign_in",
+    "observed_at": "2026-07-13T17:42:00Z",
+    "subject": "Demo user / Toronto",
+    "signal": "New device and impossible-travel pattern",
+    "data_classification": "No customer data"
+  },
+  "assessment": {
+    "outcome": "Incident candidate",
+    "severity": "high",
+    "confidence": 0.86,
+    "reason": "Correlated identity anomalies exceed the synthetic review threshold."
+  },
+  "trust_context": {
+    "before": 82,
+    "after": 54,
+    "risk": "Elevated",
+    "drivers": ["New device", "Impossible travel", "No prior compromise evidence"]
+  },
+  "evidence": [
+    { "ref": "evidence://synthetic/sign-in", "label": "Normalized sign-in event" },
+    { "ref": "evidence://synthetic/device", "label": "Device novelty signal" },
+    { "ref": "evidence://synthetic/travel", "label": "Travel correlation" }
+  ],
+  "recommendation": {
+    "action": "Revoke active sessions and require re-authentication",
+    "state": "Awaiting human approval",
+    "execution_owner": "Cloud identity / response product",
+    "dispatch": "Not dispatched"
+  },
+  "verification": {
+    "state": "Not started",
+    "expected": "Existing sessions invalidated and next sign-in challenges successfully",
+    "observed": "Unavailable — no action was executed"
+  },
+  "residual_risk": {
+    "level": "Elevated",
+    "reason": "The identity remains exposed until an approved response is executed and independently verified.",
+    "next_step": "Approve or reject the recommendation, then wait for execution and verification evidence."
+  },
+  "review_access": {
+    "state": "source-ready",
+    "path": "/workflow",
+    "approved_hosts": ["sns.kariya.ng", "sns.kariya.ca"],
+    "authentication": "Cloud-owned centralized authentication and session are required.",
+    "backend_boundary": "The browser uses the same-origin /api/ksns BFF only; the raw K-SNS backend remains private.",
+    "deployment": "Unavailable — this source does not claim DNS, routing, credentials, deployment, or production RBAC proof.",
+    "review_notes": "Static product-truth notes only; persistent review-note storage is unavailable."
+  },
+  "integration_paths": [
+    {
+      "product": "KAI",
+      "state": "contract-only",
+      "path": "KAI advisory → K-SNS server-side intake and lifecycle record → same-origin /api/ksns/explanations",
+      "detail": "The browser does not call KAI directly, and no live advisory evidence is represented."
+    },
+    {
+      "product": "KES",
+      "state": "contract-only",
+      "path": "K-SNS /actions → paired regional Console → kes.console-review.v1 posture view",
+      "detail": "Action and incident IDs are non-authoritative lookup hints. Console must re-resolve tenant and role; the handoff does not dispatch, execute, or verify."
+    }
+  ],
+  "capability_states": [
+    { "label": "Portal and lifecycle presentation", "state": "implemented", "detail": "Rendered inside the existing authenticated K-SNS UI." },
+    { "label": "Scenario and evidence values", "state": "synthetic", "detail": "Deterministic, customer-free fixture for founder review." },
+    { "label": "Private K-SNS API contract", "state": "contract-only", "detail": "Contract shape only; this synthetic walkthrough does not call a live API. The same-origin BFF and private backend boundary remain unchanged." },
+    { "label": "Live KAI/KIF/KES/KEA participation", "state": "unavailable", "detail": "No live cross-product evidence is represented." },
+    { "label": "Live action and verification", "state": "unavailable", "detail": "Requires approved execution and evidence from the owning response product." },
+    { "label": "Production tenant/RBAC proof", "state": "unavailable", "detail": "Requires founder-approved credentialed negative validation." }
+  ]
+}

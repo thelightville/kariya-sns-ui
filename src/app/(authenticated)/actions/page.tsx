@@ -1,7 +1,8 @@
 "use client";
 
-import { Activity, CheckCircle2, Clock3, ShieldAlert } from "lucide-react";
+import { Activity, Clock3, ShieldAlert } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import KesConsoleHandoff from "@/components/KesConsoleHandoff";
 import { ksnsPlatformClient } from "@/lib/ksnsPlatformClient";
 import { useKsnsQuery } from "@/lib/useKsnsQuery";
 import type { KsnsAction } from "@/types/ksns";
@@ -100,6 +101,7 @@ export default function ActionsPage() {
               <p className="truncate text-sm font-medium text-white">{action.action_type}</p>
               <p className="mt-1 text-xs text-gray-500">{action.action_id}</p>
               {action.incident_id && <p className="mt-1 text-xs text-gray-600">Incident {action.incident_id}</p>}
+              <KesConsoleHandoff action={action} />
             </div>
             <div className="min-w-0 text-sm text-gray-300">
               <p className="truncate">{action.target}</p>

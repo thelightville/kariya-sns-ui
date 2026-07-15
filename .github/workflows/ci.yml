@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main", "develop", "feat/**", "fix/**", "docs/**"]
   pull_request:
-    branches: ["main", "develop"]
+    branches: ["main", "develop", "agent/**"]
 
 permissions:
   contents: read
@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -26,12 +26,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Boundary regression tests
+        run: node --test tests/*.test.mjs
+
       - name: Build (includes type-check)
         run: npm run build
         env:
-          NEXT_PUBLIC_KSNS_API_URL: http://localhost:8000/api/v1
           NEXT_PUBLIC_APP_DOMAIN: sns.kariya.ng
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Verify auth and BFF boundaries
+        run: |
+          npm run verify:auth
+          npm run verify:public-bff
+
+      - name: Verify protected-route HTTP readiness
+        run: npm run verify:http
 
       - name: Lint
         run: npm run lint

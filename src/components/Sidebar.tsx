@@ -11,6 +11,7 @@ import {
   LogOut,
   MessageSquareText,
   Network,
+  PanelsTopLeft,
   Plug,
   Shield,
   ShieldCheck,
@@ -20,6 +21,7 @@ import {
 
 const NAV = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/workflow", label: "Security Workflow", icon: PanelsTopLeft },
   { href: "/incidents", label: "Incidents", icon: FolderKanban },
   { href: "/actions", label: "Autonomous Actions", icon: Activity },
   { href: "/trust", label: "Trust & Risk", icon: ShieldCheck },
