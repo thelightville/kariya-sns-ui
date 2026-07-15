@@ -1,0 +1,111 @@
+name: Deploy - K-SNS production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact protected main commit to release"
+        required: true
+        type: string
+      confirmation:
+        description: "Type deploy-kariya-sns-production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kariya-sns-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64, kariya-production, kariya-sns-deploy]
+    environment: kariya-sns-production
+    timeout-minutes: 30
+    env:
+      DEPLOY_HOST: "${{ vars.KARIYA_SNS_DEPLOY_HOST }}"
+      DEPLOY_USER: "${{ vars.KARIYA_SNS_DEPLOY_USER }}"
+      SERVICE_PATH: "${{ vars.KARIYA_SNS_SERVICE_PATH }}"
+      SERVICE_NAME: "${{ vars.KARIYA_SNS_SERVICE_NAME }}"
+      DEPLOY_KEY_PATH: "${{ vars.KARIYA_SNS_DEPLOY_KEY_PATH }}"
+      KNOWN_HOSTS_PATH: "${{ vars.KARIYA_SNS_KNOWN_HOSTS_PATH }}"
+      KNOWN_HOSTS_SHA256: "${{ vars.KARIYA_SNS_KNOWN_HOSTS_SHA256 }}"
+      EXPECTED_RUNNER_NAME: "${{ vars.KARIYA_SNS_RUNNER_NAME }}"
+      RUNNER_ATTESTATION_PATH: "${{ vars.KARIYA_SNS_RUNNER_ATTESTATION_PATH }}"
+      RUNNER_ATTESTATION_SHA256: "${{ vars.KARIYA_SNS_RUNNER_ATTESTATION_SHA256 }}"
+      REMOTE_ENV_PATH: "${{ vars.KARIYA_SNS_PROTECTED_ENV_PATH }}"
+
+    steps:
+      - name: Confirm exact protected release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = "deploy-kariya-sns-production"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "${{ inputs.release_sha }}" =~ ^[0-9a-f]{40}$ ]]
+          test "${{ inputs.release_sha }}" = "$GITHUB_SHA"
+          for name in DEPLOY_HOST DEPLOY_USER SERVICE_PATH SERVICE_NAME DEPLOY_KEY_PATH KNOWN_HOSTS_PATH KNOWN_HOSTS_SHA256 EXPECTED_RUNNER_NAME RUNNER_ATTESTATION_PATH RUNNER_ATTESTATION_SHA256 REMOTE_ENV_PATH; do
+            test -n "${!name:-}" || { echo "Protected deployment configuration is unavailable."; exit 1; }
+          done
+          test "$RUNNER_NAME" = "$EXPECTED_RUNNER_NAME"
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$SERVICE_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+          for path in SERVICE_PATH DEPLOY_KEY_PATH KNOWN_HOSTS_PATH RUNNER_ATTESTATION_PATH REMOTE_ENV_PATH; do
+            [[ "${!path}" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Protected deployment path is not canonical."; exit 1; }
+          done
+          [[ "$KNOWN_HOSTS_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$RUNNER_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -f "$DEPLOY_KEY_PATH"
+          test "$(stat -c '%a' "$DEPLOY_KEY_PATH")" = "600"
+          test "$(sha256sum "$KNOWN_HOSTS_PATH" | awk '{print $1}')" = "$KNOWN_HOSTS_SHA256"
+          test "$(sha256sum "$RUNNER_ATTESTATION_PATH" | awk '{print $1}')" = "$RUNNER_ATTESTATION_SHA256"
+          ssh-keygen -F "$DEPLOY_HOST" -f "$KNOWN_HOSTS_PATH" >/dev/null
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: "${{ inputs.release_sha }}"
+          persist-credentials: false
+
+      - name: Build exact K-SNS artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.release_sha }}"
+          test -z "$(git status --porcelain)"
+          npm ci
+          npm test
+          npm run lint
+          npm run build
+          npm run verify:auth
+          npm run verify:public-bff
+
+      - name: Verify protected K-SNS custody metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -i "$DEPLOY_KEY_PATH" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS_PATH")
+          REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
+          "${SSH[@]}" "$REMOTE" "set -eu; test -f '$REMOTE_ENV_PATH'; test ! -L '$REMOTE_ENV_PATH'; test \"\$(stat -c '%a' '$REMOTE_ENV_PATH')\" = 600; for key in K_SNS_AUTH_RUNTIME KARIYA_SNS_PUBLIC_ORIGIN K_SNS_TRANSACTION_DATABASE_URL K_SNS_TRANSACTION_DATABASE_CA_PATH K_SNS_TRANSACTION_KMS_KEY_RESOURCE K_SNS_GCP_WIF_CONFIG_PATH K_SNS_CLOUD_CA_BUNDLE_PATH K_SNS_CLOUD_CRL_PATH K_SNS_CLOUD_CLIENT_CERT_PATH K_SNS_CLOUD_CLIENT_KEY_PATH; do grep -q \"^\$key=\" '$REMOTE_ENV_PATH' || exit 1; done"
+
+      - name: Stage and verify immutable K-SNS image
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -i "$DEPLOY_KEY_PATH" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS_PATH")
+          REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
+          SHA="${{ inputs.release_sha }}"
+          RELEASE_DIR="$SERVICE_PATH/.release-staging/$SHA"
+          ROLLBACK_FILE="$SERVICE_PATH/.release-state/sns-$SHA.rollback"
+
+          "${SSH[@]}" "$REMOTE" "set -eu; umask 077; mkdir -p '$RELEASE_DIR' '$SERVICE_PATH/.release-state'"
+          rsync -az --delete --exclude='.git' --exclude='.env*' --exclude='node_modules' -e "ssh -i $DEPLOY_KEY_PATH -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_PATH" ./ "$REMOTE:$RELEASE_DIR/"
+          "${SSH[@]}" "$REMOTE" "set -eu; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); test -n \"\$IMAGE_REF\"; PREVIOUS_ID=\$(docker image inspect --format '{{.Id}}' \"\$IMAGE_REF\" 2>/dev/null || true); printf '%s\n' \"\$PREVIOUS_ID\" > '$ROLLBACK_FILE'; chmod 600 '$ROLLBACK_FILE'; cd '$RELEASE_DIR'; docker build --pull=false --build-arg KARIYA_SOURCE_REVISION='$SHA' -t \"\$IMAGE_REF\" .; test \"\$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' \"\$IMAGE_REF\")\" = '$SHA'; cd '$SERVICE_PATH'; docker compose up -d --no-deps '$SERVICE_NAME'"
+
+          if ! "${SSH[@]}" "$REMOTE" "set -eu; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy; IMAGE_ID=\$(docker inspect --format '{{.Image}}' '$SERVICE_NAME'); test \"\$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' \"\$IMAGE_ID\")\" = '$SHA'"; then
+            "${SSH[@]}" "$REMOTE" "set -eu; PREVIOUS_ID=\$(cat '$ROLLBACK_FILE'); test -n \"\$PREVIOUS_ID\"; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); docker tag \"\$PREVIOUS_ID\" \"\$IMAGE_REF\"; docker compose up -d --no-deps '$SERVICE_NAME'; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy"
+            echo "Immutable K-SNS health failed; prior image digest restored."
+            exit 1
+          fi
