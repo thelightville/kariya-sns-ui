@@ -30,7 +30,10 @@ export function createRegionalEnvelopeKeyProvider(
         const version = key?.primary?.name;
         if (
           typeof version !== "string" ||
-          !version.startsWith(`${keyResource}/cryptoKeyVersions/`)
+          !version.startsWith(`${keyResource}/cryptoKeyVersions/`) ||
+          key.primary.protectionLevel !== "HSM" ||
+          key.primary.state !== "ENABLED" ||
+          key.primary.algorithm !== "GOOGLE_SYMMETRIC_ENCRYPTION"
         ) {
           fail();
         }
