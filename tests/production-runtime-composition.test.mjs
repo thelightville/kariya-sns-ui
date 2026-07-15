@@ -9,6 +9,7 @@ import { assertAuthSchemaHead } from "../src/server/auth/nodePostgresPool.mjs";
 import {
   createCloudMtlsClient,
   parseCloudResponse,
+  validateCloudServerIdentity,
 } from "../src/server/auth/cloudMtlsClient.mjs";
 import { selectAuthRuntime } from "../src/server/auth/runtimeComposition.mjs";
 
@@ -25,6 +26,12 @@ function environment(region = "ng") {
     K_SNS_TRANSACTION_KEK_ID: `ksns-auth-${region}-transaction-kek`,
     K_SNS_TRANSACTION_KEK_CURRENT_VERSION: "v2",
     K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION: "v1",
+    K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: ng
+      ? "https://10.0.0.10:8443"
+      : "https://10.0.0.20:8443",
+    K_SNS_CLOUD_MTLS_SERVER_NAME: ng
+      ? "cloud-auth.ng.internal.kariya"
+      : "cloud-auth.ca.internal.kariya",
     K_SNS_CLOUD_CLIENT_CERT_PATH: "/run/ksns/client.crt",
     K_SNS_CLOUD_CLIENT_KEY_PATH: "/run/ksns/client.key",
     K_SNS_CLOUD_CA_BUNDLE_PATH: "/run/ksns/cloud-ca.pem",
@@ -36,7 +43,10 @@ test("protected production config pins exact regional resources", () => {
   const ng = loadProductionAuthConfig(environment("ng"));
   assert.equal(ng.region, "ng");
   assert.equal(ng.spiffe_uri, "spiffe://kariya/services/ksns/ng");
-  assert.equal(ng.endpoints.introspect, "https://console.kariya.ng/cloud/auth/session/introspect");
+  assert.equal(ng.cloud_origin, "https://console.kariya.ng");
+  assert.equal(ng.transport_origin, "https://10.0.0.10:8443");
+  assert.equal(ng.tls_server_name, "cloud-auth.ng.internal.kariya");
+  assert.equal(ng.endpoints.introspect, "https://10.0.0.10:8443/cloud/auth/session/introspect");
   const ca = loadProductionAuthConfig(environment("ca"));
   assert.equal(ca.region, "ca");
   assert.equal(ca.envelope_key_id, "ksns-auth-ca-transaction-kek");
@@ -48,6 +58,43 @@ test("protected production config pins exact regional resources", () => {
       CREDENTIALS_DIRECTORY: "relative/credentials",
     })
   );
+});
+
+test("private transport and server identity fail closed on drift", () => {
+  for (const overrides of [
+    { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://console.kariya.ng" },
+    { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://127.0.0.1:8443" },
+    { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "http://10.0.0.10:8443" },
+    { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://10.0.0.10" },
+    { K_SNS_CLOUD_MTLS_SERVER_NAME: "cloud-auth.ca.internal.kariya" },
+    { K_SNS_CLOUD_MTLS_SERVER_NAME: "console.kariya.ng" },
+  ]) {
+    assert.throws(() => loadProductionAuthConfig({ ...environment("ng"), ...overrides }));
+  }
+});
+
+test("dedicated server certificate identity rejects wrong or additional SANs", () => {
+  const ok = validateCloudServerIdentity(
+    "cloud-auth.ng.internal.kariya",
+    { subjectaltname: "DNS:cloud-auth.ng.internal.kariya" },
+    "cloud-auth.ng.internal.kariya",
+    () => undefined
+  );
+  assert.equal(ok, undefined);
+  for (const [hostname, subjectaltname] of [
+    ["cloud-auth.ca.internal.kariya", "DNS:cloud-auth.ng.internal.kariya"],
+    ["cloud-auth.ng.internal.kariya", "DNS:console.kariya.ng"],
+    ["cloud-auth.ng.internal.kariya", "DNS:cloud-auth.ng.internal.kariya, DNS:console.kariya.ng"],
+  ]) {
+    assert.ok(
+      validateCloudServerIdentity(
+        hostname,
+        { subjectaltname },
+        "cloud-auth.ng.internal.kariya",
+        () => undefined
+      ) instanceof Error
+    );
+  }
 });
 
 test("production selection is explicit and malformed protected config stays unavailable", async () => {
@@ -125,6 +172,8 @@ test("Cloud client uses exact operation endpoints and never follows redirects", 
     "/cloud/auth/session/logout",
   ]);
   assert.ok(calls.every((call) => call.receivedConfig.region === "ng"));
+  assert.ok(calls.every((call) => new URL(call.url).origin === config.transport_origin));
+  assert.ok(calls.every((call) => !call.url.includes(config.cloud_origin)));
   assert.deepEqual(calls.map((call) => call.responseMode), [
     "json",
     "json",
