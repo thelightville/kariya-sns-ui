@@ -56,7 +56,13 @@ test("production selection is explicit and malformed protected config stays unav
   });
   assert.equal(disabled.composition, null);
   assert.equal(called, 0);
-  await assert.rejects(disabled.runtime.exchange.start({}), /unavailable/);
+  await assert.rejects(
+    disabled.runtime.exchange.start({
+      region: "ng",
+      normalized_return_path: "/workflow",
+    }),
+    /unavailable/
+  );
 
   const malformed = selectAuthRuntime({ K_SNS_AUTH_RUNTIME: "production" }, {
     productionFactory() {
