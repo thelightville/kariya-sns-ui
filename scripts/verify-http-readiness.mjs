@@ -71,6 +71,22 @@ try {
   assert.equal(login.status, 200);
   assert.equal(login.headers.get("location"), null);
 
+  for (const pathname of ["/api/auth/login", "/api/auth/mfa"]) {
+    const response = await fetch(`${origin}${pathname}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "synthetic@example.invalid", password: "never-sent" }),
+    });
+    assert.equal(response.status, 410, pathname);
+    assert.equal(response.headers.get("set-cookie"), null, pathname);
+  }
+
+  const start = await fetch(`${origin}/api/auth/exchange/start?next=%2Fworkflow`, {
+    redirect: "manual",
+  });
+  assert.equal(start.status, 503);
+  assert.equal(start.headers.get("set-cookie"), null);
+
   const protectedRoutes = ["/workflow", "/actions", "/incidents", "/overview"];
   for (const pathname of protectedRoutes) {
     const response = await fetch(`${origin}${pathname}`, {
@@ -105,6 +121,19 @@ try {
     );
     assert.doesNotMatch(location, /evil\.example|unapproved\.internal|sns\.kariya|console\.kariya/i);
   }
+
+  const fakeSession = await fetch(`${origin}/workflow`, {
+    redirect: "manual",
+    headers: { Cookie: "sns_token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
+  });
+  assert.equal(fakeSession.status, 307);
+  assert.equal(fakeSession.headers.get("location"), "/login?next=%2Fworkflow");
+
+  const bff = await fetch(`${origin}/api/ksns/incidents`, {
+    headers: { Cookie: "sns_token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
+  });
+  assert.equal(bff.status, 503);
+  assert.equal(bff.headers.get("cache-control"), "no-store");
 
   console.log(
     `http-readiness verification passed on explicit loopback origin ${origin}`

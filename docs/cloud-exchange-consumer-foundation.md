@@ -1,112 +1,84 @@
-# Cloud exchange consumer foundation
+# Cloud exchange consumer completion
 
-Status: **source-only contract foundation; no login or session capability exists**.
+Status: **source integration candidate; production authority, trust, persistence,
+and runtime enablement remain unavailable**.
 
-This additive slice mirrors the accepted K-SNS consumer boundary for Cloud
-`cloud.durable-exchange.v1`. It contains pure validation, exact regional
-mapping, transaction-state types, fail-closed interfaces, and deterministic
-tests only.
+This slice implements the K-SNS side of the accepted Cloud authorization
+contracts for the founder journey to sns.kariya.ng. It preserves the paired
+.ca tuple, but it does not add another hostname or deployment surface.
 
-It does not add or change:
+## What the source now does
 
-- authorization start or callback routes;
-- cookie creation, deletion, or session issuance;
-- Next Proxy, BFF, login, MFA, or client session-store behavior;
-- PostgreSQL, Redis, filesystem, browser-storage, or in-memory persistence;
-- environment variables or runtime configuration;
-- network calls, Cloud endpoints, backend calls, credentials, certificates,
-  KMS/HSM access, or trust material;
-- runtime success, deployment, DNS, workflow, merge, or release behavior.
+- /api/auth/exchange/start creates independently random state, nonce, and PKCE
+  verifier, stores only required digests plus an encrypted custody envelope,
+  registers the exact regional transaction, and sends the browser only
+  request_id and raw state to the paired Console origin.
+- /api/auth/exchange/callback accepts exactly code and state, atomically
+  reserves the matching regional transaction, clears the custody envelope
+  before redemption, validates Cloud nonce/region/audience/time, and writes a
+  host-local sns_token whose positive Max-Age is the smaller of 899 and the
+  Cloud-reported remaining lifetime.
+- Proxy and BFF authorization call Cloud introspection for every protected
+  request. Cookie presence is never authorization and no stale-success cache
+  exists.
+- The BFF forwards only validated ksns.bff-context.v1 plus the Accept and
+  Content-Type inbound allowlist. It never forwards the opaque session handle,
+  a Cloud token, browser Cookie/Authorization/Host/Forwarded headers, static
+  tenant configuration, or caller query authority.
+- Direct K-SNS password and MFA proxy routes return 410; credentials are not
+  accepted or forwarded.
+- Logout requests Cloud family logout and always clears only the exact-host
+  K-SNS cookie.
 
-Every supplied adapter throws `consumer_foundation_unavailable`. The modules
-are not wired into the application. Existing authentication behavior remains
-unchanged and is not made compliant or production-ready by this draft.
+All workflow scenarios remain deterministic synthetic/customer-free evidence.
+Nothing in this slice claims live KAI, KES, KEA, dispatch, execution, or
+verification.
 
-## Frozen source contracts
-
-The exact regional tuples are:
+## Exact regional contract
 
 | Region | Issuer | Audience | Callback | Service URI SAN |
 |---|---|---|---|---|
-| NG | `https://console.kariya.ng` | `https://sns.kariya.ng` | `https://sns.kariya.ng/api/auth/exchange/callback` | `spiffe://kariya/services/ksns/ng` |
-| CA | `https://console.kariya.ca` | `https://sns.kariya.ca` | `https://sns.kariya.ca/api/auth/exchange/callback` | `spiffe://kariya/services/ksns/ca` |
+| NG | https://console.kariya.ng | https://sns.kariya.ng | https://sns.kariya.ng/api/auth/exchange/callback | spiffe://kariya/services/ksns/ng |
+| CA | https://console.kariya.ca | https://sns.kariya.ca | https://sns.kariya.ca/api/auth/exchange/callback | spiffe://kariya/services/ksns/ca |
 
-State, nonce, verifier, request ID, code, and opaque session handles are
-canonical unpadded base64url values representing exactly 32 bytes. Cloud is the
-time authority. A future host-only `sns_token` cookie may use only the positive
-value `min(899, expires_at - server_time)`; this module does not write it.
+State, nonce, verifier, request ID, authorization code, and opaque session
+handle are canonical unpadded base64url encodings of exactly 32 bytes. Cloud is
+the only time authority. Preauthorization is exactly 300 seconds; redemption
+sessions are exactly 899 seconds and the local cookie never extends that
+expiry.
 
-The local transaction type is deliberately inert:
-`created -> registered -> callback_reserved -> redeem_sent -> completed`,
-with terminal `terminal_failed` and `expired` states. Returning a callback
-reservation to `registered` represents only a future pre-redemption lease
-release. There is no transition back after `redeem_sent`.
+## Durable custody and replay behavior
 
-`ksns.bff-context.v1` is represented as an exact-key, channel-authenticated
-context derived only from an active, region-matched Cloud introspection result.
-The stripping helper retains only `Accept` and `Content-Type`; browser
-Authorization, Cookie, Host/Forwarded, tenant, and Kariya context headers are
-discarded. This draft does not send the context or authenticate any backend.
+migrations/0001_create_ksns_auth_transactions.sql defines the regional
+PostgreSQL correctness record. The source store accepts an injected
+PostgreSQL-compatible pool; this repository adds no pg dependency, connection
+string, database client, or automatic migration runner.
 
-## Transaction custody source contract
+The state sequence is created -> registered -> callback_reserved ->
+redeem_sent -> completed, with terminal terminal_failed and expired states.
+State digest is unique, mutations use row locks and version CAS, Cloud
+registration time is exactly 300 seconds, and terminal tombstones remain for
+exactly 24 hours. The encrypted envelope is cleared before the single
+redemption attempt. A lost or ambiguous response after redeem_sent is terminal
+and cannot retry or issue another session.
 
-The selected future correctness authority is a Cloud-approved HA PostgreSQL
-service in each region. NG and CA transaction data and key references never
-cross regions. Redis is not a correctness authority, replay store, or lock
-service. No PostgreSQL client or connection exists in this draft.
+The envelope profile is ksns.transaction-envelope.aes-256-gcm.v1: fresh
+256-bit data key, 96-bit IV, 128-bit tag, and canonical regional AAD. The data
+key is wrapped by an injected regional key-provider port. No production key,
+credential, certificate, KMS/HSM adapter, or trust material is included. The
+deterministic key provider under tests/fixtures is synthetic and non-secret
+and must never be used outside tests.
 
-`ksns.auth-transaction.v1` freezes the future record shape and validation
-rules:
+## Fail-closed runtime posture
 
-- state and Cloud request IDs are stored only as canonical SHA-256 digests;
-- the normalized return path is same-origin, authority-free, and at most 512
-  characters;
-- registration records Cloud's exact 300-second issued/expires interval;
-- callback reservation is versioned and cannot outlive that interval;
-- row identity, region, state digest, and version are CAS invariants;
-- moving to `redeem_sent` clears the encrypted custody envelope and can never
-  return to a retryable state;
-- completed, failed, and expired records retain a replay tombstone for exactly
-  24 hours before becoming cleanup-eligible.
+runtimeComposition.mjs deliberately composes only unavailable transaction,
+cipher, Cloud, and introspection adapters. Therefore the checked-in runtime
+cannot create a session. Start, callback, protected-cookie, BFF, and logout
+paths return generic unavailable/unauthorized behavior until separately
+authorized production PostgreSQL, KMS/HSM, TLS 1.3 mTLS, Cloud client, and
+introspection adapters are provisioned and tested.
 
-The future envelope profile is
-`ksns.transaction-envelope.aes-256-gcm.v1`: one fresh 256-bit data key and
-96-bit IV per record, a 128-bit authentication tag, and canonical AAD binding
-the transaction ID, region, state digest, regional audience/callback, and
-creation time. This draft validates only envelope metadata and constructs AAD.
-It does not encrypt, decrypt, hash AAD, generate a key, wrap a key, or call a
-KMS/HSM.
-
-A future regional KMS/HSM keeps each key-encryption key outside application
-source and configuration. Records carry only a key ID, key version, and wrapped
-data key. New writes use the current version; reads select the recorded
-version. Missing, revoked, unknown, cross-region, unwrap, or authentication
-failure must fail closed without plaintext or fallback. Rotation, rewrapping,
-custody, provisioning, and recovery remain separately authorized work.
-
-The `TransactionStore`, `TransactionCipher`, and `KeyEncryptionProvider`
-ports are exact source interfaces with unavailable adapters only. These tests
-are synthetic interface evidence. They are not evidence of PostgreSQL
-transactions, KMS/HSM behavior, encryption, 2/16/100 concurrency, crash
-recovery, failover, cleanup scheduling, or production runtime behavior.
-
-## Reserved later implementation names
-
-The following names are documentation reservations only. They are not files,
-dependencies, or configuration reads in this draft:
-
-- dependency: `pg`;
-- migration: `migrations/0001_create_ksns_auth_transactions.sql`;
-- protected configuration: `K_SNS_TRANSACTION_DATABASE_URL`,
-  `K_SNS_TRANSACTION_STORE_ENABLED` (default false),
-  `K_SNS_TRANSACTION_KEK_ID`, `K_SNS_TRANSACTION_KEK_VERSION`, and
-  `K_SNS_TRANSACTION_REGION`.
-
-None may use a `NEXT_PUBLIC_` prefix. Adding them, applying a migration,
-provisioning a store or key, or enabling an adapter requires a separate
-Architecture decision.
-
-Production persistence, encrypted verifier/nonce custody, mTLS, certificate
-issuance, key custody, callback atomicity, live introspection, logout/revocation,
-backend enforcement, HA validation, and authenticated visual review remain
-unavailable and require separate authorization.
+The SQL migration is not applied. No database, Redis, DNS, certificate, secret,
+deployment, or production runtime is changed by this source branch. Synthetic
+tests exercise interface behavior only; they are not PostgreSQL concurrency,
+KMS custody, HA/failover, certificate, ingress, or production crash evidence.

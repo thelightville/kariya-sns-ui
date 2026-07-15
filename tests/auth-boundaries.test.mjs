@@ -78,11 +78,18 @@ test("MFA completion rejects unsafe next destinations", () => {
   assertUnsafeDestinationsUseDefault("MFA completion");
 });
 
-test("password and MFA completion share the guarded navigation path", () => {
+test("Cloud exchange start is the only guarded login path", () => {
   assert.match(
     loginPage,
     /const next = safeNextPath\(searchParams\.get\("next"\)\);/
   );
-  assert.equal((loginPage.match(/completeLogin\(\);/g) ?? []).length, 2);
+  assert.match(
+    loginPage,
+    /\/api\/auth\/exchange\/start\?next=\$\{encodeURIComponent\(next\)\}/
+  );
+  assert.doesNotMatch(
+    loginPage,
+    /\/api\/auth\/(?:login|mfa)|type=["']password["']|sessionStore/
+  );
   assert.doesNotMatch(loginPage, /router\.push\(searchParams\.get/);
 });

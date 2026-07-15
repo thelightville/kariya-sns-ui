@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -10,11 +10,8 @@ function walk(dir) {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     const stat = statSync(full);
-    if (stat.isDirectory()) {
-      entries.push(...walk(full));
-    } else if (/\.(ts|tsx|js|jsx)$/.test(name)) {
-      entries.push(full);
-    }
+    if (stat.isDirectory()) entries.push(...walk(full));
+    else if (/\.(ts|tsx|js|jsx|mjs)$/u.test(name)) entries.push(full);
   }
   return entries;
 }
@@ -24,55 +21,73 @@ for (const file of walk(sourceDir)) {
   if (text.includes("alpha1-stub-session")) {
     failures.push(`${file}: stub session token must not be used`);
   }
-  if (/always\s+["']?succeeds/i.test(text)) {
-    failures.push(`${file}: auth route must not document an always-success path`);
-  }
   if (text.includes("NEXT_PUBLIC_KSNS_API_URL")) {
     failures.push(`${file}: NEXT_PUBLIC_KSNS_API_URL must not be used`);
   }
 }
 
-const loginRoutePath = join(sourceDir, "app", "api", "auth", "login", "route.ts");
-const mfaRoutePath = join(sourceDir, "app", "api", "auth", "mfa", "route.ts");
-const loginPagePath = join(sourceDir, "app", "login", "page.tsx");
+const read = (...parts) => readFileSync(join(sourceDir, ...parts), "utf8");
+const loginRoute = read("app", "api", "auth", "login", "route.ts");
+const mfaRoute = read("app", "api", "auth", "mfa", "route.ts");
+const startRoute = read("app", "api", "auth", "exchange", "start", "route.ts");
+const callbackRoute = read("app", "api", "auth", "exchange", "callback", "route.ts");
+const loginPage = read("app", "login", "page.tsx");
+const proxy = read("proxy.ts");
+const runtime = read("server", "auth", "runtimeComposition.mjs");
 
-const loginRoute = readFileSync(loginRoutePath, "utf8");
-if (!loginRoute.includes("process.env.KARIYA_CLOUD_AUTH_BASE_URL")) {
-  failures.push("login route must use server-side KARIYA_CLOUD_AUTH_BASE_URL");
-}
-if (!loginRoute.includes("/cloud/login")) {
-  failures.push("login route must proxy to /cloud/login");
-}
-if (!loginRoute.includes("mfa_required") || !loginRoute.includes("mfa_token")) {
-  failures.push("login route must preserve MFA challenge flow without setting a session cookie");
-}
-
-if (!existsSync(mfaRoutePath)) {
-  failures.push("MFA route is required");
-} else {
-  const mfaRoute = readFileSync(mfaRoutePath, "utf8");
-  if (!mfaRoute.includes("process.env.KARIYA_CLOUD_AUTH_BASE_URL")) {
-    failures.push("MFA route must use server-side KARIYA_CLOUD_AUTH_BASE_URL");
+for (const [label, text] of [["login", loginRoute], ["mfa", mfaRoute]]) {
+  for (const forbidden of [
+    "KARIYA_CLOUD_AUTH_BASE_URL",
+    "/cloud/login",
+    "/cloud/mfa/verify",
+    "access_token",
+    "mfa_token",
+    "password",
+  ]) {
+    if (text.includes(forbidden)) failures.push(`${label} route retains ${forbidden}`);
   }
-  if (!mfaRoute.includes("/cloud/mfa/verify")) {
-    failures.push("MFA route must proxy to /cloud/mfa/verify");
-  }
-  if (!mfaRoute.includes("access_token")) {
-    failures.push("MFA route must set a session only after a full access token is returned");
+  if (!text.includes("status: 410") || !text.includes("Direct K-SNS credential")) {
+    failures.push(`${label} route must fail closed with retired credential guidance`);
   }
 }
 
-const loginPage = readFileSync(loginPagePath, "utf8");
-if (!loginPage.includes("/api/auth/mfa") || !loginPage.includes("mfa_required")) {
-  failures.push("login page must support MFA challenge completion");
+if (
+  !loginPage.includes("/api/auth/exchange/start") ||
+  /type="password"|\/api\/auth\/mfa|sessionStore/u.test(loginPage)
+) {
+  failures.push("login page must use only the Cloud exchange start route");
 }
-if (/local\s+stub/i.test(loginPage) || /Alpha\s+1\s+baseline/i.test(loginPage)) {
-  failures.push("login page must not present local stub auth as the public path");
+if (
+  !startRoute.includes("authRuntime.exchange.start") ||
+  !callbackRoute.includes('keys.join(",") !== "code,state"') ||
+  !callbackRoute.includes("hostLocalSessionCookie")
+) {
+  failures.push("exact start/callback composition is required");
+}
+if (
+  !proxy.includes("await authRuntime.sessions.authorize") ||
+  /!token\)\s*return\s+NextResponse\.next/u.test(proxy)
+) {
+  failures.push("Proxy must require fresh Cloud session authority");
+}
+for (const required of [
+  "httpOnly: true",
+  "secure: true",
+  'sameSite: "lax"',
+  "maxAge",
+]) {
+  if (!runtime.includes(required)) failures.push(`host-local cookie missing ${required}`);
+}
+if (/domain\s*:/iu.test(runtime)) {
+  failures.push("host-local sns_token must not set Domain");
+}
+if (!runtime.includes("unavailableTransactionStore()") ||
+    !runtime.includes("unavailableSessionIntrospector()")) {
+  failures.push("production composition must remain unavailable by default");
 }
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-
 console.log("production-auth verification passed");

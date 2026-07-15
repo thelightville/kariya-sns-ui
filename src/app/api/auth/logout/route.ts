@@ -1,15 +1,38 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-const AUTH_COOKIE = "sns_token";
+import {
+  AUTH_COOKIE_NAME,
+  authRuntime,
+  clearedHostLocalSessionCookie,
+  configuredRegion,
+} from "@/server/auth/runtimeComposition.mjs";
 
-export async function POST() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(AUTH_COOKIE, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+function clearCookie(response: NextResponse) {
+  const cookie = clearedHostLocalSessionCookie();
+  response.cookies.set(cookie.name, cookie.value, cookie.options);
   return response;
+}
+
+export async function POST(request: NextRequest) {
+  const handle = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  if (!handle) return clearCookie(NextResponse.json({ ok: true }));
+
+  try {
+    const region = configuredRegion(process.env.KARIYA_SNS_PUBLIC_ORIGIN);
+    await authRuntime.sessions.logout(handle, region);
+    return clearCookie(NextResponse.json({ ok: true }));
+  } catch {
+    return clearCookie(
+      NextResponse.json(
+        { error: "K-SNS session authority is unavailable." },
+        {
+          status: 503,
+          headers: {
+            "cache-control": "no-store",
+            "referrer-policy": "no-referrer",
+          },
+        }
+      )
+    );
+  }
 }
