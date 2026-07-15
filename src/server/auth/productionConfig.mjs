@@ -101,6 +101,7 @@ export function loadProductionAuthConfig(env = process.env) {
     database_ca_path: protectedAbsolutePath(env, "K_SNS_TRANSACTION_DATABASE_CA_PATH"),
     kms_key_resource: kmsKeyResource(env, definition.kms_location),
     kms_location: definition.kms_location,
+    gcp_wif_config_path: protectedAbsolutePath(env, "K_SNS_GCP_WIF_CONFIG_PATH"),
     client_certificate_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CLIENT_CERT_PATH"),
     client_private_key_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CLIENT_KEY_PATH"),
     cloud_ca_bundle_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CA_BUNDLE_PATH"),
