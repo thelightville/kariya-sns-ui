@@ -22,7 +22,7 @@ const CONTEXT = Object.freeze({
 function syntheticFs({
   current = Buffer.alloc(32, 1),
   previous = Buffer.alloc(32, 2),
-  uid = 0,
+  uid = 1001,
   directoryMode = 0o40500,
   fileMode = 0o100400,
   symlink = false,
@@ -78,7 +78,7 @@ function provider(fs, options = {}) {
       previousVersion: "v1",
       ...options,
     },
-    { fs, random: (length) => Buffer.alloc(length, 9) }
+    { fs, random: (length) => Buffer.alloc(length, 9), expectedUid: 1001 }
   );
 }
 
@@ -147,7 +147,7 @@ test("retired versions and invalid systemd custody metadata fail closed", async 
 
   for (const fs of [
     syntheticFs({ current: Buffer.alloc(31) }),
-    syntheticFs({ uid: 1001 }),
+    syntheticFs({ uid: 1002 }),
     syntheticFs({ directoryMode: 0o40700 | 0o077 }),
     syntheticFs({ fileMode: 0o100440 }),
     syntheticFs({ symlink: true }),
