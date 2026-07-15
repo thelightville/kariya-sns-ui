@@ -10,13 +10,11 @@ const REGIONS = Object.freeze({
     public_origin: "https://sns.kariya.ng",
     cloud_origin: "https://console.kariya.ng",
     spiffe_uri: "spiffe://kariya/services/ksns/ng",
-    kms_location: "africa-south1",
   }),
   ca: Object.freeze({
     public_origin: "https://sns.kariya.ca",
     cloud_origin: "https://console.kariya.ca",
     spiffe_uri: "spiffe://kariya/services/ksns/ca",
-    kms_location: "northamerica-northeast2",
   }),
 });
 
@@ -57,10 +55,10 @@ function databaseUrl(env) {
   return value;
 }
 
-function kmsKeyResource(env, expectedLocation) {
-  const value = exactString(env, "K_SNS_TRANSACTION_KMS_KEY_RESOURCE");
-  const match = /^projects\/([a-z][a-z0-9-]{4,28}[a-z0-9])\/locations\/([a-z0-9-]+)\/keyRings\/([A-Za-z0-9_-]{1,63})\/cryptoKeys\/([A-Za-z0-9_-]{1,63})$/u.exec(value);
-  if (!match || match[2] !== expectedLocation) fail();
+function keyVersion(env, name, { optional = false } = {}) {
+  if (optional && (env[name] === undefined || env[name] === "")) return null;
+  const value = exactString(env, name);
+  if (!/^v[1-9][0-9]{0,8}$/u.test(value)) fail();
   return value;
 }
 
@@ -99,9 +97,17 @@ export function loadProductionAuthConfig(env = process.env) {
     spiffe_uri: definition.spiffe_uri,
     database_url: databaseUrl(env),
     database_ca_path: protectedAbsolutePath(env, "K_SNS_TRANSACTION_DATABASE_CA_PATH"),
-    kms_key_resource: kmsKeyResource(env, definition.kms_location),
-    kms_location: definition.kms_location,
-    gcp_wif_config_path: protectedAbsolutePath(env, "K_SNS_GCP_WIF_CONFIG_PATH"),
+    credential_directory: protectedAbsolutePath(env, "CREDENTIALS_DIRECTORY"),
+    envelope_key_id: exactString(env, "K_SNS_TRANSACTION_KEK_ID"),
+    envelope_current_version: keyVersion(
+      env,
+      "K_SNS_TRANSACTION_KEK_CURRENT_VERSION"
+    ),
+    envelope_previous_version: keyVersion(
+      env,
+      "K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION",
+      { optional: true }
+    ),
     client_certificate_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CLIENT_CERT_PATH"),
     client_private_key_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CLIENT_KEY_PATH"),
     cloud_ca_bundle_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CA_BUNDLE_PATH"),
