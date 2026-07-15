@@ -4,6 +4,7 @@ import { join } from "node:path";
 const root = process.cwd();
 const sourceDir = join(root, "src");
 const failures = [];
+const packageManifest = readFileSync(join(root, "package.json"), "utf8");
 
 function walk(dir) {
   const entries = [];
@@ -119,6 +120,12 @@ for (const required of [
   "plaintext.fill(0)",
 ]) {
   if (!custody.includes(required)) failures.push(`systemd custody missing ${required}`);
+}
+if (/process\.env|console\.|\.export\s*\(/u.test(custody)) {
+  failures.push("custody provider must not read key environment values, log, or export keys");
+}
+if (packageManifest.includes("@google-cloud/kms")) {
+  failures.push("rejected GCP KMS dependency remains");
 }
 for (const forbidden of [
   "@google-cloud/kms",
