@@ -89,7 +89,14 @@ test("regional KMS adapter wraps only 32-byte DEKs with the configured HSM key",
   const kmsClient = {
     async getCryptoKey(request) {
       calls.push(["get", request]);
-      return [{ primary: { name: version } }];
+      return [{
+        primary: {
+          name: version,
+          protectionLevel: "HSM",
+          state: "ENABLED",
+          algorithm: "GOOGLE_SYMMETRIC_ENCRYPTION",
+        },
+      }];
     },
     async encrypt(request) {
       calls.push(["encrypt", request]);
