@@ -42,7 +42,7 @@ async function activeSession(token: string | undefined) {
   }
 }
 
-export async function proxy(request: NextRequest) {
+async function authorizeRequest(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
@@ -61,6 +61,10 @@ export async function proxy(request: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+export function proxy(request: NextRequest) {
+  return authorizeRequest(request);
 }
 
 export const config = {
