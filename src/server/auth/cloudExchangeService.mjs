@@ -15,6 +15,10 @@ import {
   validateTransactionRecord,
 } from "./transactionCustody.mjs";
 import { sha256Base64url } from "./transactionCrypto.mjs";
+import {
+  PREAUTHORIZATION_TENANT_SCOPE,
+  TRANSACTION_WRAP_PURPOSE,
+} from "./regionalEnvelopeKeyProvider.mjs";
 
 const AUTHORIZATION_PATH = "/auth/exchange/authorize";
 const RESERVATION_SECONDS = 30;
@@ -78,7 +82,12 @@ export function createCloudExchangeService({
       };
       const envelope = await cipher.seal(
         { nonce, verifier },
-        canonicalTransactionAad(aadSource)
+        canonicalTransactionAad(aadSource),
+        {
+          tenant: PREAUTHORIZATION_TENANT_SCOPE,
+          region,
+          purpose: TRANSACTION_WRAP_PURPOSE,
+        }
       );
       const created = validateTransactionRecord({
         schema_version: TRANSACTION_SCHEMA_VERSION,
@@ -172,7 +181,12 @@ export function createCloudExchangeService({
 
       const secrets = await cipher.open(
         reserved.envelope,
-        canonicalTransactionAad(reserved)
+        canonicalTransactionAad(reserved),
+        {
+          tenant: PREAUTHORIZATION_TENANT_SCOPE,
+          region,
+          purpose: TRANSACTION_WRAP_PURPOSE,
+        }
       );
       canonical32(secrets.nonce, "nonce");
       canonical32(secrets.verifier, "verifier");
