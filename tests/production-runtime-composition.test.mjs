@@ -6,7 +6,10 @@ import {
   loadProductionAuthConfig,
 } from "../src/server/auth/productionConfig.mjs";
 import { assertAuthSchemaHead } from "../src/server/auth/nodePostgresPool.mjs";
-import { createRegionalEnvelopeKeyProvider } from "../src/server/auth/regionalEnvelopeKeyProvider.mjs";
+import {
+  createRegionalEnvelopeKeyProvider,
+  validateExternalAccountWifConfig,
+} from "../src/server/auth/regionalEnvelopeKeyProvider.mjs";
 import { createCloudMtlsClient } from "../src/server/auth/cloudMtlsClient.mjs";
 import { selectAuthRuntime } from "../src/server/auth/runtimeComposition.mjs";
 
@@ -22,6 +25,7 @@ function environment(region = "ng") {
     K_SNS_TRANSACTION_KMS_KEY_RESOURCE: ng
       ? "projects/synthetic-ksns/locations/africa-south1/keyRings/ksns/cryptoKeys/transactions"
       : "projects/synthetic-ksns/locations/northamerica-northeast2/keyRings/ksns/cryptoKeys/transactions",
+    K_SNS_GCP_WIF_CONFIG_PATH: "/run/ksns/gcp-wif.json",
     K_SNS_CLOUD_CLIENT_CERT_PATH: "/run/ksns/client.crt",
     K_SNS_CLOUD_CLIENT_KEY_PATH: "/run/ksns/client.key",
     K_SNS_CLOUD_CA_BUNDLE_PATH: "/run/ksns/cloud-ca.pem",
@@ -124,6 +128,26 @@ test("regional KMS adapter wraps only 32-byte DEKs with the configured HSM key",
   assert.equal((await provider.unwrapKey(wrapped, reference)).length, 32);
   await assert.rejects(provider.wrapKey(Buffer.alloc(31), reference), /unavailable/);
   assert.deepEqual(calls.map(([name]) => name), ["get", "encrypt", "decrypt"]);
+});
+
+test("KMS authentication accepts external-account WIF and rejects service-account keys", () => {
+  assert.equal(
+    validateExternalAccountWifConfig({
+      type: "external_account",
+      audience: "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/ksns/providers/onprem",
+      subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
+      token_url: "https://sts.googleapis.com/v1/token",
+      credential_source: { file: "/run/ksns/subject-token" },
+    }).type,
+    "external_account"
+  );
+  assert.throws(() =>
+    validateExternalAccountWifConfig({
+      type: "service_account",
+      private_key: "synthetic-forbidden",
+      client_email: "forbidden@synthetic.invalid",
+    })
+  );
 });
 
 test("Cloud client uses exact operation endpoints and never follows redirects", async () => {
