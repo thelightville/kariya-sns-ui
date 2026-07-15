@@ -113,7 +113,8 @@ for (const required of [
   "SYSTEMD_CURRENT_CREDENTIAL",
   "PREAUTHORIZATION_TENANT_SCOPE",
   "TRANSACTION_WRAP_PURPOSE",
-  "fileMetadata.uid !== 0",
+  "expectedUid < 1",
+  "fileMetadata.uid !== expectedUid",
   "(fileMetadata.mode & 0o777) !== 0o400",
   "plaintext.fill(0)",
 ]) {
