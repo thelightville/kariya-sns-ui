@@ -53,16 +53,20 @@ for (const forbidden of [
   "secrets.",
   "latest",
   "@google-cloud/kms",
-  "K_SNS_TRANSACTION_KMS_KEY_RESOURCE",
-  "K_SNS_GCP_WIF_CONFIG_PATH",
-  "GOOGLE_APPLICATION_CREDENTIALS",
 ]) {
   assert.equal(workflow.includes(forbidden), false, forbidden);
 }
 assert.ok(health.includes('{ status: "ok" }'));
 assert.ok(health.includes('"Cache-Control": "no-store"'));
 assert.ok(health.includes('"Referrer-Policy": "no-referrer"'));
-assert.equal(workflow.includes("K_SNS_CLOUD_CLIENT_KEY="), false);
+for (const rejectedAssignment of [
+  "K_SNS_TRANSACTION_KMS_KEY_RESOURCE=",
+  "K_SNS_GCP_WIF_CONFIG_PATH=",
+  "GOOGLE_APPLICATION_CREDENTIALS=",
+  "K_SNS_CLOUD_CLIENT_KEY=",
+]) {
+  assert.equal(workflow.includes(rejectedAssignment), false, rejectedAssignment);
+}
 assert.equal(dropIn.includes("Environment=K_SNS_TRANSACTION_KEK"), false);
 
 console.log("immutable K-SNS deployment boundary: pass");
