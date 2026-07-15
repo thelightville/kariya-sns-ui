@@ -44,7 +44,14 @@ function active(region = "ng") {
 
 function harness({ redeemThrows = false } = {}) {
   let now = 1000;
-  const randomValues = [\n    STATE,\n    NONCE,\n    VERIFIER,\n    RESERVATION,\n    fixed32(9),\n    fixed32(10),\n  ];
+  const randomValues = [
+    STATE,
+    NONCE,
+    VERIFIER,
+    RESERVATION,
+    fixed32(9),
+    fixed32(10),
+  ];
   const store = createSyntheticTransactionStore();
   let registerRequest;
   let redeemRequest;
