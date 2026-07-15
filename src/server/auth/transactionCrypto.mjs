@@ -49,8 +49,12 @@ export function createAesGcmTransactionCipher(keyProvider) {
         cipher.final(),
       ]);
       const tag = cipher.getAuthTag();
-      const wrapped = await keyProvider.wrapKey(dataKey, keyReference);
-      dataKey.fill(0);
+      let wrapped;
+      try {
+        wrapped = await keyProvider.wrapKey(dataKey, keyReference);
+      } finally {
+        dataKey.fill(0);
+      }
 
       return validateTransactionEnvelope({
         crypto_profile: TRANSACTION_ENVELOPE_PROFILE,
