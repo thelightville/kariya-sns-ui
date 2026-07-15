@@ -1,53 +1,67 @@
-import { NextRequest, NextResponse } from "next/server";
-import { buildBffHeaders } from "@/lib/bffHeaders.mjs";
+import { randomBytes } from "node:crypto";
 
-const AUTH_COOKIE = "sns_token";
+import { NextRequest, NextResponse } from "next/server";
+
+import {
+  buildBffContext,
+  stripInboundAuthorityHeaders,
+  validateBffContext,
+} from "@/server/backend/bffContext.mjs";
+import {
+  AUTH_COOKIE_NAME,
+  authRuntime,
+  configuredRegion,
+} from "@/server/auth/runtimeComposition.mjs";
+
 const API_BASE = process.env.K_SNS_BASE_URL ?? "";
-const TENANT_ID = process.env.K_SNS_TENANT_ID ?? "";
 
 type RouteContext = {
-  params: Promise<{
-    path?: string[];
-  }>;
+  params: Promise<{ path?: string[] }>;
 };
 
-
 function jsonError(message: string, status: number) {
-  return NextResponse.json({ error: message }, { status });
+  return NextResponse.json(
+    { error: message },
+    { status, headers: { "cache-control": "no-store" } }
+  );
 }
 
-function buildTargetUrl(request: NextRequest, path: string[]) {
-  if (!API_BASE) {
-    return null;
-  }
-
+function buildTargetUrl(path: string[]) {
+  if (!API_BASE) return null;
   const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
   const suffix = path.map(encodeURIComponent).join("/");
   const target = new URL(`${base}/${suffix}`);
-
-  request.nextUrl.searchParams.forEach((value, key) => {
-    target.searchParams.append(key, value);
-  });
-
-  return target;
+  return ["http:", "https:"].includes(target.protocol) ? target : null;
 }
 
-async function proxy(request: NextRequest, context: RouteContext) {
-  const token = request.cookies.get(AUTH_COOKIE)?.value;
-  if (!token) {
-    return jsonError("Unauthorized: sign in to K-SNS and try again.", 401);
+async function proxyToKsns(request: NextRequest, context: RouteContext) {
+  const handle = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  if (!handle) return jsonError("Unauthorized.", 401);
+
+  let authority;
+  let region;
+  try {
+    region = configuredRegion(process.env.KARIYA_SNS_PUBLIC_ORIGIN);
+    authority = await authRuntime.sessions.authorize(handle, region);
+  } catch {
+    return jsonError("K-SNS session authority is unavailable.", 503);
   }
 
   const { path = [] } = await context.params;
-  const target = buildTargetUrl(request, path);
-  if (!target) {
-    return jsonError("K-SNS backend is not configured.", 503);
+  const target = buildTargetUrl(path);
+  if (!target) return jsonError("K-SNS backend is unavailable.", 503);
+
+  const requestId = randomBytes(32).toString("base64url");
+  const contextHeaders = validateBffContext(
+    buildBffContext(authority, region, requestId)
+  );
+  const headers = stripInboundAuthorityHeaders(request.headers);
+  for (const [name, value] of Object.entries(contextHeaders)) {
+    headers.set(name, value);
   }
 
   const method = request.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
-  const headers = buildBffHeaders(request.headers, token, TENANT_ID);
-
   let upstream: Response;
   try {
     upstream = await fetch(target, {
@@ -60,13 +74,9 @@ async function proxy(request: NextRequest, context: RouteContext) {
     return jsonError("K-SNS backend is unavailable.", 502);
   }
 
-  const responseHeaders = new Headers();
+  const responseHeaders = new Headers({ "cache-control": "no-store" });
   const contentType = upstream.headers.get("content-type");
-  if (contentType) {
-    responseHeaders.set("content-type", contentType);
-  }
-  responseHeaders.set("cache-control", "no-store");
-
+  if (contentType) responseHeaders.set("content-type", contentType);
   return new NextResponse(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
@@ -75,21 +85,17 @@ async function proxy(request: NextRequest, context: RouteContext) {
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  return proxy(request, context);
+  return proxyToKsns(request, context);
 }
-
 export async function POST(request: NextRequest, context: RouteContext) {
-  return proxy(request, context);
+  return proxyToKsns(request, context);
 }
-
 export async function PUT(request: NextRequest, context: RouteContext) {
-  return proxy(request, context);
+  return proxyToKsns(request, context);
 }
-
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  return proxy(request, context);
+  return proxyToKsns(request, context);
 }
-
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  return proxy(request, context);
+  return proxyToKsns(request, context);
 }
