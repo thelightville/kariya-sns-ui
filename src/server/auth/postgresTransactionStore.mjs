@@ -143,7 +143,7 @@ export function createPostgresTransactionStore(pool) {
 
     async reserveCallback(stateDigest, reservation) {
       return withTransaction(pool, async (client) => {
-        const current = rowRecord(
+        let current = rowRecord(
           (
             await client.query(
               "SELECT * FROM ksns_auth_transactions WHERE state_digest = $1 FOR UPDATE",
@@ -151,6 +151,25 @@ export function createPostgresTransactionStore(pool) {
             )
           ).rows[0]
         );
+        if (
+          current.state === "callback_reserved" &&
+          current.reservation_expires_at <= reservation.now &&
+          reservation.now < current.cloud_expires_at
+        ) {
+          current = rowRecord(
+            (
+              await client.query(
+                `UPDATE ksns_auth_transactions
+                 SET state = 'registered', state_version = state_version + 1,
+                     reservation_id_digest = NULL, reservation_expires_at = NULL,
+                     updated_at = $2
+                 WHERE id = $1 AND state = 'callback_reserved'
+                   AND state_version = $3${RETURNING}`,
+                [current.id, reservation.now, current.state_version]
+              )
+            ).rows[0]
+          );
+        }
         if (
           current.region !== reservation.region ||
           current.state !== "registered" ||
