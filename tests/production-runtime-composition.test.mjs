@@ -10,7 +10,10 @@ import {
   createRegionalEnvelopeKeyProvider,
   validateExternalAccountWifConfig,
 } from "../src/server/auth/regionalEnvelopeKeyProvider.mjs";
-import { createCloudMtlsClient } from "../src/server/auth/cloudMtlsClient.mjs";
+import {
+  createCloudMtlsClient,
+  parseCloudResponse,
+} from "../src/server/auth/cloudMtlsClient.mjs";
 import { selectAuthRuntime } from "../src/server/auth/runtimeComposition.mjs";
 
 function environment(region = "ng") {
@@ -157,9 +160,9 @@ test("Cloud client uses exact operation endpoints and never follows redirects", 
     materialLoader() {
       return Object.freeze({});
     },
-    async transport(url, body, receivedConfig) {
-      calls.push({ url, body, receivedConfig });
-      return { ok: true };
+    async transport(url, body, receivedConfig, _materialLoader, responseMode) {
+      calls.push({ url, body, receivedConfig, responseMode });
+      return responseMode === "empty" ? undefined : { ok: true };
     },
   });
   await client.register({ contract_version: "cloud.exchange-preauthorization.v1" });
@@ -175,6 +178,55 @@ test("Cloud client uses exact operation endpoints and never follows redirects", 
     "/cloud/auth/session/logout",
   ]);
   assert.ok(calls.every((call) => call.receivedConfig.region === "ng"));
+  assert.deepEqual(calls.map((call) => call.responseMode), [
+    "json",
+    "json",
+    "json",
+    "empty",
+    "empty",
+  ]);
+});
+
+test("bodyless 204 is accepted only for revoke and logout response mode", () => {
+  assert.equal(
+    parseCloudResponse(
+      { statusCode: 204, headers: {}, body: Buffer.alloc(0) },
+      "empty"
+    ),
+    undefined
+  );
+  for (const response of [
+    { statusCode: 204, headers: {}, body: Buffer.from("{}") },
+    { statusCode: 204, headers: { "content-length": "0" }, body: Buffer.alloc(0) },
+    { statusCode: 204, headers: { "transfer-encoding": "chunked" }, body: Buffer.alloc(0) },
+    { statusCode: 200, headers: {}, body: Buffer.alloc(0) },
+  ]) {
+    assert.throws(() => parseCloudResponse(response, "empty"), /unavailable/);
+  }
+});
+
+test("response-bearing operations require exact JSON success shape", () => {
+  assert.deepEqual(
+    parseCloudResponse(
+      {
+        statusCode: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: Buffer.from('{"ok":true}'),
+      },
+      "json"
+    ),
+    { ok: true }
+  );
+  for (const response of [
+    { statusCode: 204, headers: {}, body: Buffer.alloc(0) },
+    { statusCode: 200, headers: { "content-type": "application/json" }, body: Buffer.alloc(0) },
+    { statusCode: 200, headers: { "content-type": "application/json" }, body: Buffer.from("{") },
+    { statusCode: 200, headers: { "content-type": "text/plain" }, body: Buffer.from("{}") },
+    { statusCode: 201, headers: { "content-type": "application/json" }, body: Buffer.from("{}") },
+    { statusCode: 503, headers: { "content-type": "application/json" }, body: Buffer.from("{}") },
+  ]) {
+    assert.throws(() => parseCloudResponse(response, "json"), /unavailable/);
+  }
 });
 
 test("synthetic production composition closes every owned client once", async () => {
