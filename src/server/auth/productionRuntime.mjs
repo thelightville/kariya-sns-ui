@@ -25,6 +25,7 @@ export function createProductionAuthComposition(
     keyProvider = createRegionalEnvelopeKeyProvider({
       region: config.region,
       keyResource: config.kms_key_resource,
+      wifConfigPath: config.gcp_wif_config_path,
     }),
     cloud = createCloudMtlsClient(config),
     runtimeFactory,
