@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
 
 import { KeyManagementServiceClient } from "@google-cloud/kms";
 
@@ -16,11 +17,42 @@ function validateKeyResource(region, keyResource) {
   if (!match || match[1] !== definition.kms_location) fail();
 }
 
+export function validateExternalAccountWifConfig(value) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value.type !== "external_account" ||
+    typeof value.audience !== "string" ||
+    !value.audience.startsWith("//iam.googleapis.com/") ||
+    value.subject_token_type !== "urn:ietf:params:oauth:token-type:jwt" ||
+    value.token_url !== "https://sts.googleapis.com/v1/token" ||
+    value.credential_source === null ||
+    typeof value.credential_source !== "object" ||
+    "private_key" in value ||
+    "private_key_id" in value ||
+    "client_email" in value
+  ) {
+    fail();
+  }
+  return value;
+}
+
+function createWifKmsClient(path) {
+  try {
+    validateExternalAccountWifConfig(JSON.parse(readFileSync(path, "utf8")));
+    return new KeyManagementServiceClient({ keyFilename: path });
+  } catch {
+    fail();
+  }
+}
+
 export function createRegionalEnvelopeKeyProvider(
-  { region, keyResource },
-  { kmsClient = new KeyManagementServiceClient() } = {}
+  { region, keyResource, wifConfigPath },
+  { kmsClient } = {}
 ) {
   validateKeyResource(region, keyResource);
+  kmsClient ??= createWifKmsClient(wifConfigPath);
   if (!kmsClient || typeof kmsClient.getCryptoKey !== "function") fail();
 
   return Object.freeze({
