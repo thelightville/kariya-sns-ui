@@ -75,7 +75,26 @@ export function createSyntheticTransactionStore() {
     },
     async reserveCallback(stateDigest, reservation) {
       const id = byState.get(stateDigest);
-      const current = byId.get(id);
+      let current = byId.get(id);
+      if (
+        current?.state === "callback_reserved" &&
+        current.reservation_expires_at <= reservation.now &&
+        reservation.now < current.cloud_expires_at
+      ) {
+        current = assertTransactionCas(
+          current,
+          {
+            ...current,
+            state: "registered",
+            state_version: current.state_version + 1,
+            reservation_id_digest: null,
+            reservation_expires_at: null,
+            updated_at: reservation.now,
+          },
+          current.state_version
+        );
+        byId.set(id, current);
+      }
       if (
         !current ||
         current.state !== "registered" ||
