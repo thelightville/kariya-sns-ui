@@ -40,6 +40,7 @@ export function createProductionAuthComposition(
     keyProvider.assertReady(),
     cloud.assertReady(),
   ]).then(() => undefined);
+  void ready.catch(() => {});
 
   const gatedStore = gatedPort(ready, store, [
     "create",
