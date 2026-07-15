@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -186,3 +189,43 @@ test("custody source does not accept key bytes from process environment", () => 
   ];
   for (const name of names) assert.equal(process.env[name], undefined);
 });
+
+test(
+  "disposable Linux runtime directory exercises real ownership and mode checks",
+  {
+    skip:
+      process.platform === "win32" ||
+      typeof process.getuid !== "function" ||
+      process.getuid() < 1,
+  },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ksns-systemd-credential-"));
+    const credential = join(directory, SYSTEMD_CURRENT_CREDENTIAL);
+    try {
+      await chmod(directory, 0o700);
+      await writeFile(credential, Buffer.alloc(32, 11), { mode: 0o400 });
+      await chmod(credential, 0o400);
+      const custody = createRegionalEnvelopeKeyProvider(
+        {
+          region: "ng",
+          credentialDirectory: directory,
+          keyId: KEY_ID,
+          currentVersion: "v1",
+          previousVersion: null,
+        },
+        { random: (length) => Buffer.alloc(length, 12) }
+      );
+      const reference = await custody.currentKeyReference();
+      const plaintext = Buffer.alloc(32, 13);
+      const wrapped = await custody.wrapKey(plaintext, reference, CONTEXT);
+      assert.deepEqual(
+        await custody.unwrapKey(wrapped, reference, CONTEXT),
+        plaintext
+      );
+      await custody.close();
+    } finally {
+      await chmod(credential, 0o600).catch(() => {});
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+);
