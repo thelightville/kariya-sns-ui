@@ -154,6 +154,16 @@ test("retired versions and invalid systemd custody metadata fail closed", async 
   ]) {
     assert.throws(() => provider(fs), /unavailable/);
   }
+  const missing = syntheticFs();
+  missing.readFileSync = () => {
+    throw new Error("must-not-disclose-credential-path");
+  };
+  assert.throws(
+    () => provider(missing),
+    (error) =>
+      /unavailable/.test(error.message) &&
+      !/must-not-disclose/.test(error.message)
+  );
   assert.throws(
     () => provider(syntheticFs(), { credentialDirectory: "relative" }),
     /unavailable/
