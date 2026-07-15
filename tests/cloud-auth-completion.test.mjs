@@ -160,6 +160,35 @@ test("ambiguous redemption is terminal and cannot replay", async () => {
   assert.equal(value.store.signingAttempts, 1);
 });
 
+test("expired pre-redemption reservation can recover without replaying redemption", async () => {
+  const value = harness();
+  await value.service.start({ region: "ng", normalized_return_path: "/workflow" });
+  const digest = value.registerRequest.state_sha256;
+  await value.store.reserveCallback(digest, {
+    region: "ng",
+    reservation_id_digest: fixed32(11),
+    reservation_expires_at: 1130,
+    now: 1100,
+  });
+  await assert.rejects(
+    value.store.reserveCallback(digest, {
+      region: "ng",
+      reservation_id_digest: fixed32(12),
+      reservation_expires_at: 1159,
+      now: 1129,
+    })
+  );
+  const recovered = await value.store.reserveCallback(digest, {
+    region: "ng",
+    reservation_id_digest: fixed32(12),
+    reservation_expires_at: 1160,
+    now: 1130,
+  });
+  assert.equal(recovered.state, "callback_reserved");
+  assert.equal(recovered.state_version, 5);
+  assert.equal(value.store.signingAttempts, 0);
+});
+
 test("session authority introspects every request and fails closed", async () => {
   let calls = 0;
   const sessions = createSessionAuthority({
