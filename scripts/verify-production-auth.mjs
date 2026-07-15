@@ -95,6 +95,7 @@ for (const required of [
   'kms_location: "northamerica-northeast2"',
   "K_SNS_CLOUD_CLIENT_KEY_PATH",
   "K_SNS_CLOUD_CA_BUNDLE_PATH",
+  "K_SNS_GCP_WIF_CONFIG_PATH",
 ]) {
   if (!productionConfig.includes(required)) failures.push(`production config missing ${required}`);
 }
