@@ -79,7 +79,7 @@ export function parseCloudResponse(
   const contentType = headers["content-type"];
   if (
     typeof contentType !== "string" ||
-    !/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/iu.test(contentType)
+    !/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(contentType)
   ) {
     fail();
   }
