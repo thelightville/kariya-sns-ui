@@ -79,17 +79,20 @@ function assertCredentialMetadata(directory, path, fs, expectedUid) {
 
 function loadCredential(directory, credentialName, metadata, fs, expectedUid) {
   const path = join(directory, credentialName);
-  assertCredentialMetadata(directory, path, fs, expectedUid);
-  const plaintext = fs.readFileSync(path);
-  if (!Buffer.isBuffer(plaintext) || plaintext.length !== 32) fail();
+  let plaintext;
   try {
+    assertCredentialMetadata(directory, path, fs, expectedUid);
+    plaintext = fs.readFileSync(path);
+    if (!Buffer.isBuffer(plaintext) || plaintext.length !== 32) fail();
     return {
       ...metadata,
       credential_name: credentialName,
       key: createSecretKey(plaintext),
     };
+  } catch {
+    fail();
   } finally {
-    plaintext.fill(0);
+    if (Buffer.isBuffer(plaintext)) plaintext.fill(0);
   }
 }
 
