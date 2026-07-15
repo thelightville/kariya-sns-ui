@@ -46,9 +46,11 @@ decrypt to a persistent file.
 2. Put only key identifier/version metadata in the protected server
    configuration. Do not put the key or encoded key there.
 3. Run `systemd-analyze verify`, then `systemctl daemon-reload`.
-4. Start through systemd. A missing credential directory, symlink, non-root
-   owner, mode other than 0400 in the runtime directory, or key length other
-   than 32 bytes must keep K-SNS unavailable.
+4. Start through systemd. The encrypted-at-rest blob remains root-owned 0600.
+   The decrypted runtime credential must be exposed by systemd as a non-root,
+   service-UID-owned 0400 file inside a service-UID-owned directory with no
+   group/world access. A missing directory, UID mismatch, symlink, wrong mode,
+   or key length other than 32 bytes must keep K-SNS unavailable.
 5. Verify the running process receives `CREDENTIALS_DIRECTORY` from systemd,
    and that the credential is not present in `docker inspect`, image history,
    `systemctl show ... Environment`, logs, or browser artifacts.
