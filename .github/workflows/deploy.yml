@@ -29,6 +29,7 @@ jobs:
       DEPLOY_USER: "${{ vars.KARIYA_SNS_DEPLOY_USER }}"
       SERVICE_PATH: "${{ vars.KARIYA_SNS_SERVICE_PATH }}"
       SERVICE_NAME: "${{ vars.KARIYA_SNS_SERVICE_NAME }}"
+      SYSTEMD_UNIT: "${{ vars.KARIYA_SNS_SYSTEMD_UNIT }}"
       DEPLOY_KEY_PATH: "${{ vars.KARIYA_SNS_DEPLOY_KEY_PATH }}"
       KNOWN_HOSTS_PATH: "${{ vars.KARIYA_SNS_KNOWN_HOSTS_PATH }}"
       KNOWN_HOSTS_SHA256: "${{ vars.KARIYA_SNS_KNOWN_HOSTS_SHA256 }}"
@@ -46,13 +47,14 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           [[ "${{ inputs.release_sha }}" =~ ^[0-9a-f]{40}$ ]]
           test "${{ inputs.release_sha }}" = "$GITHUB_SHA"
-          for name in DEPLOY_HOST DEPLOY_USER SERVICE_PATH SERVICE_NAME DEPLOY_KEY_PATH KNOWN_HOSTS_PATH KNOWN_HOSTS_SHA256 EXPECTED_RUNNER_NAME RUNNER_ATTESTATION_PATH RUNNER_ATTESTATION_SHA256 REMOTE_ENV_PATH; do
+          for name in DEPLOY_HOST DEPLOY_USER SERVICE_PATH SERVICE_NAME SYSTEMD_UNIT DEPLOY_KEY_PATH KNOWN_HOSTS_PATH KNOWN_HOSTS_SHA256 EXPECTED_RUNNER_NAME RUNNER_ATTESTATION_PATH RUNNER_ATTESTATION_SHA256 REMOTE_ENV_PATH; do
             test -n "${!name:-}" || { echo "Protected deployment configuration is unavailable."; exit 1; }
           done
           test "$RUNNER_NAME" = "$EXPECTED_RUNNER_NAME"
           [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
           [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           [[ "$SERVICE_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+          [[ "$SYSTEMD_UNIT" =~ ^[a-zA-Z0-9_.@-]+\.service$ ]]
           for path in SERVICE_PATH DEPLOY_KEY_PATH KNOWN_HOSTS_PATH RUNNER_ATTESTATION_PATH REMOTE_ENV_PATH; do
             [[ "${!path}" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Protected deployment path is not canonical."; exit 1; }
           done
@@ -88,7 +90,7 @@ jobs:
           set -euo pipefail
           SSH=(ssh -i "$DEPLOY_KEY_PATH" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS_PATH")
           REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
-          "${SSH[@]}" "$REMOTE" "set -eu; test -f '$REMOTE_ENV_PATH'; test ! -L '$REMOTE_ENV_PATH'; test \"\$(stat -c '%a' '$REMOTE_ENV_PATH')\" = 600; for key in K_SNS_AUTH_RUNTIME KARIYA_SNS_PUBLIC_ORIGIN K_SNS_TRANSACTION_DATABASE_URL K_SNS_TRANSACTION_DATABASE_CA_PATH K_SNS_TRANSACTION_KMS_KEY_RESOURCE K_SNS_GCP_WIF_CONFIG_PATH K_SNS_CLOUD_CA_BUNDLE_PATH K_SNS_CLOUD_CRL_PATH K_SNS_CLOUD_CLIENT_CERT_PATH K_SNS_CLOUD_CLIENT_KEY_PATH; do grep -q \"^\$key=\" '$REMOTE_ENV_PATH' || exit 1; done"
+          "${SSH[@]}" "$REMOTE" "set -eu; test -f '$REMOTE_ENV_PATH'; test ! -L '$REMOTE_ENV_PATH'; test \"\$(stat -c '%a' '$REMOTE_ENV_PATH')\" = 600; for key in K_SNS_AUTH_RUNTIME KARIYA_SNS_PUBLIC_ORIGIN K_SNS_TRANSACTION_DATABASE_URL K_SNS_TRANSACTION_DATABASE_CA_PATH K_SNS_TRANSACTION_KEK_ID K_SNS_TRANSACTION_KEK_CURRENT_VERSION K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION K_SNS_CLOUD_CA_BUNDLE_PATH K_SNS_CLOUD_CRL_PATH K_SNS_CLOUD_CLIENT_CERT_PATH K_SNS_CLOUD_CLIENT_KEY_PATH; do grep -q \"^\$key=\" '$REMOTE_ENV_PATH' || exit 1; done; ! grep -Eq '^(K_SNS_TRANSACTION_KMS_KEY_RESOURCE|K_SNS_GCP_WIF_CONFIG_PATH|GOOGLE_APPLICATION_CREDENTIALS)=' '$REMOTE_ENV_PATH'; LOAD=\$(systemctl show '$SYSTEMD_UNIT' --property=LoadCredentialEncrypted --value); printf '%s' \"\$LOAD\" | grep -q 'ksns-transaction-kek-current'; CURRENT=/etc/credstore.encrypted/ksns-transaction-kek-current; test -f \"\$CURRENT\"; test ! -L \"\$CURRENT\"; test \"\$(stat -c '%U:%G:%a' \"\$CURRENT\")\" = root:root:600; PREVIOUS_VERSION=\$(sed -n 's/^K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION=//p' '$REMOTE_ENV_PATH'); if test -n \"\$PREVIOUS_VERSION\"; then printf '%s' \"\$LOAD\" | grep -q 'ksns-transaction-kek-previous'; PREVIOUS=/etc/credstore.encrypted/ksns-transaction-kek-previous; test -f \"\$PREVIOUS\"; test ! -L \"\$PREVIOUS\"; test \"\$(stat -c '%U:%G:%a' \"\$PREVIOUS\")\" = root:root:600; fi"
 
       - name: Stage and verify immutable K-SNS image
         shell: bash
@@ -105,7 +107,7 @@ jobs:
           "${SSH[@]}" "$REMOTE" "set -eu; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); test -n \"\$IMAGE_REF\"; PREVIOUS_ID=\$(docker image inspect --format '{{.Id}}' \"\$IMAGE_REF\" 2>/dev/null || true); printf '%s\n' \"\$PREVIOUS_ID\" > '$ROLLBACK_FILE'; chmod 600 '$ROLLBACK_FILE'; cd '$RELEASE_DIR'; docker build --pull=false --build-arg KARIYA_SOURCE_REVISION='$SHA' -t \"\$IMAGE_REF\" .; test \"\$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' \"\$IMAGE_REF\")\" = '$SHA'; cd '$SERVICE_PATH'; docker compose up -d --no-deps '$SERVICE_NAME'"
 
           if ! "${SSH[@]}" "$REMOTE" "set -eu; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy; IMAGE_ID=\$(docker inspect --format '{{.Image}}' '$SERVICE_NAME'); test \"\$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' \"\$IMAGE_ID\")\" = '$SHA'"; then
-            "${SSH[@]}" "$REMOTE" "set -eu; PREVIOUS_ID=\$(cat '$ROLLBACK_FILE'); test -n \"\$PREVIOUS_ID\"; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); docker tag \"\$PREVIOUS_ID\" \"\$IMAGE_REF\"; docker compose up -d --no-deps '$SERVICE_NAME'; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy"
+            "${SSH[@]}" "$REMOTE" "set -eu; PREVIOUS_ID=\$(cat '$ROLLBACK_FILE'); test -n \"\$PREVIOUS_ID\"; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); docker tag \"\$PREVIOUS_ID\" \"\$IMAGE_REF\"; systemctl restart '$SYSTEMD_UNIT'; test \"\$(systemctl is-active '$SYSTEMD_UNIT')\" = active; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy"
             echo "Immutable K-SNS health failed; prior image digest restored."
             exit 1
           fi
