@@ -36,7 +36,7 @@ const proxy = read("proxy.ts");
 const runtime = read("server", "auth", "runtimeComposition.mjs");
 const productionConfig = read("server", "auth", "productionConfig.mjs");
 const cloudClient = read("server", "auth", "cloudMtlsClient.mjs");
-const kms = read("server", "auth", "regionalEnvelopeKeyProvider.mjs");
+const custody = read("server", "auth", "regionalEnvelopeKeyProvider.mjs");
 
 for (const [label, text] of [["login", loginRoute], ["mfa", mfaRoute]]) {
   for (const forbidden of [
@@ -91,11 +91,12 @@ if (!runtime.includes("unavailableTransactionStore()") ||
 }
 for (const required of [
   "K_SNS_AUTH_RUNTIME !== PRODUCTION_RUNTIME_MODE",
-  'kms_location: "africa-south1"',
-  'kms_location: "northamerica-northeast2"',
+  "CREDENTIALS_DIRECTORY",
+  "K_SNS_TRANSACTION_KEK_ID",
+  "K_SNS_TRANSACTION_KEK_CURRENT_VERSION",
+  "K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION",
   "K_SNS_CLOUD_CLIENT_KEY_PATH",
   "K_SNS_CLOUD_CA_BUNDLE_PATH",
-  "K_SNS_GCP_WIF_CONFIG_PATH",
 ]) {
   if (!productionConfig.includes(required)) failures.push(`production config missing ${required}`);
 }
@@ -107,8 +108,26 @@ for (const required of [
 ]) {
   if (!cloudClient.includes(required)) failures.push(`mTLS client missing ${required}`);
 }
-if (!kms.includes('protectionLevel !== "HSM"') || /GOOGLE_APPLICATION_CREDENTIALS/u.test(kms)) {
-  failures.push("KMS must require HSM under ADC without service-account key files");
+for (const required of [
+  "createSecretKey",
+  "SYSTEMD_CURRENT_CREDENTIAL",
+  "PREAUTHORIZATION_TENANT_SCOPE",
+  "TRANSACTION_WRAP_PURPOSE",
+  "fileMetadata.uid !== 0",
+  "(fileMetadata.mode & 0o777) !== 0o400",
+  "plaintext.fill(0)",
+]) {
+  if (!custody.includes(required)) failures.push(`systemd custody missing ${required}`);
+}
+for (const forbidden of [
+  "@google-cloud/kms",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "K_SNS_TRANSACTION_KMS_KEY_RESOURCE",
+  "K_SNS_GCP_WIF_CONFIG_PATH",
+]) {
+  if (custody.includes(forbidden) || productionConfig.includes(forbidden)) {
+    failures.push(`rejected GCP custody marker remains: ${forbidden}`);
+  }
 }
 
 if (failures.length > 0) {
