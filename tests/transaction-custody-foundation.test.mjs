@@ -255,7 +255,7 @@ test("terminal records enforce exact 24-hour replay tombstones", () => {
   );
 });
 
-test("PostgreSQL, cipher and KMS ports have only generic unavailable behavior", async () => {
+test("PostgreSQL, cipher and key-custody ports have only generic unavailable behavior", async () => {
   const adapters = [
     unavailableTransactionStore(),
     unavailableTransactionCipher(),

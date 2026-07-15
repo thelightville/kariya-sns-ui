@@ -38,7 +38,7 @@ export function createAesGcmTransactionCipher(keyProvider) {
   }
 
   return Object.freeze({
-    async seal(plaintext, aad) {
+    async seal(plaintext, aad, wrappingContext) {
       const keyReference = await keyProvider.currentKeyReference();
       const dataKey = randomBytes(32);
       const iv = randomBytes(12);
@@ -51,7 +51,10 @@ export function createAesGcmTransactionCipher(keyProvider) {
       const tag = cipher.getAuthTag();
       let wrapped;
       try {
-        wrapped = await keyProvider.wrapKey(dataKey, keyReference);
+        wrapped = await keyProvider.wrapKey(dataKey, keyReference, {
+          ...wrappingContext,
+          aad_sha256: sha256Base64url(aad),
+        });
       } finally {
         dataKey.fill(0);
       }
@@ -68,7 +71,7 @@ export function createAesGcmTransactionCipher(keyProvider) {
       });
     },
 
-    async open(envelope, aad) {
+    async open(envelope, aad, wrappingContext) {
       const validated = validateTransactionEnvelope(envelope);
       if (validated.aad_sha256 !== sha256Base64url(aad)) {
         fail("transaction envelope AAD does not match");
@@ -79,7 +82,8 @@ export function createAesGcmTransactionCipher(keyProvider) {
           {
             key_id: validated.kek_key_id,
             key_version: validated.kek_key_version,
-          }
+          },
+          { ...wrappingContext, aad_sha256: validated.aad_sha256 }
         )
       );
       if (dataKey.length !== 32) fail("unwrapped data key must be 32 bytes");

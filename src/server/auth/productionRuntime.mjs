@@ -24,8 +24,10 @@ export function createProductionAuthComposition(
     pool = createNodePostgresPool(config),
     keyProvider = createRegionalEnvelopeKeyProvider({
       region: config.region,
-      keyResource: config.kms_key_resource,
-      wifConfigPath: config.gcp_wif_config_path,
+      credentialDirectory: config.credential_directory,
+      keyId: config.envelope_key_id,
+      currentVersion: config.envelope_current_version,
+      previousVersion: config.envelope_previous_version,
     }),
     cloud = createCloudMtlsClient(config),
     runtimeFactory,

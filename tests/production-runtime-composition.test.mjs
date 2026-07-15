@@ -7,10 +7,6 @@ import {
 } from "../src/server/auth/productionConfig.mjs";
 import { assertAuthSchemaHead } from "../src/server/auth/nodePostgresPool.mjs";
 import {
-  createRegionalEnvelopeKeyProvider,
-  validateExternalAccountWifConfig,
-} from "../src/server/auth/regionalEnvelopeKeyProvider.mjs";
-import {
   createCloudMtlsClient,
   parseCloudResponse,
 } from "../src/server/auth/cloudMtlsClient.mjs";
@@ -25,10 +21,10 @@ function environment(region = "ng") {
       : "https://sns.kariya.ca",
     K_SNS_TRANSACTION_DATABASE_URL: "postgresql://synthetic.invalid/ksns",
     K_SNS_TRANSACTION_DATABASE_CA_PATH: "/run/ksns/db-ca.pem",
-    K_SNS_TRANSACTION_KMS_KEY_RESOURCE: ng
-      ? "projects/synthetic-ksns/locations/africa-south1/keyRings/ksns/cryptoKeys/transactions"
-      : "projects/synthetic-ksns/locations/northamerica-northeast2/keyRings/ksns/cryptoKeys/transactions",
-    K_SNS_GCP_WIF_CONFIG_PATH: "/run/ksns/gcp-wif.json",
+    CREDENTIALS_DIRECTORY: "/run/credentials/kariya-sns-ui.service",
+    K_SNS_TRANSACTION_KEK_ID: `ksns-auth-${region}-transaction-kek`,
+    K_SNS_TRANSACTION_KEK_CURRENT_VERSION: "v2",
+    K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION: "v1",
     K_SNS_CLOUD_CLIENT_CERT_PATH: "/run/ksns/client.crt",
     K_SNS_CLOUD_CLIENT_KEY_PATH: "/run/ksns/client.key",
     K_SNS_CLOUD_CA_BUNDLE_PATH: "/run/ksns/cloud-ca.pem",
@@ -39,17 +35,17 @@ function environment(region = "ng") {
 test("protected production config pins exact regional resources", () => {
   const ng = loadProductionAuthConfig(environment("ng"));
   assert.equal(ng.region, "ng");
-  assert.equal(ng.kms_location, "africa-south1");
   assert.equal(ng.spiffe_uri, "spiffe://kariya/services/ksns/ng");
   assert.equal(ng.endpoints.introspect, "https://console.kariya.ng/cloud/auth/session/introspect");
   const ca = loadProductionAuthConfig(environment("ca"));
   assert.equal(ca.region, "ca");
-  assert.equal(ca.kms_location, "northamerica-northeast2");
+  assert.equal(ca.envelope_key_id, "ksns-auth-ca-transaction-kek");
+  assert.equal(ng.envelope_current_version, "v2");
+  assert.equal(ng.envelope_previous_version, "v1");
   assert.throws(() =>
     loadProductionAuthConfig({
       ...environment("ng"),
-      K_SNS_TRANSACTION_KMS_KEY_RESOURCE:
-        "projects/synthetic-ksns/locations/northamerica-northeast2/keyRings/ksns/cryptoKeys/transactions",
+      CREDENTIALS_DIRECTORY: "relative/credentials",
     })
   );
 });
@@ -94,63 +90,14 @@ test("schema-head mismatch fails closed without runtime DDL", async () => {
   assert.doesNotMatch(queries[0], /CREATE|ALTER|INSERT|UPDATE|DELETE/iu);
 });
 
-test("regional KMS adapter wraps only 32-byte DEKs with the configured HSM key", async () => {
-  const keyResource =
-    "projects/synthetic-ksns/locations/africa-south1/keyRings/ksns/cryptoKeys/transactions";
-  const version = `${keyResource}/cryptoKeyVersions/7`;
-  const calls = [];
-  const kmsClient = {
-    async getCryptoKey(request) {
-      calls.push(["get", request]);
-      return [{
-        primary: {
-          name: version,
-          protectionLevel: "HSM",
-          state: "ENABLED",
-          algorithm: "GOOGLE_SYMMETRIC_ENCRYPTION",
-        },
-      }];
-    },
-    async encrypt(request) {
-      calls.push(["encrypt", request]);
-      return [{ name: version, ciphertext: Buffer.from("wrapped") }];
-    },
-    async decrypt(request) {
-      calls.push(["decrypt", request]);
-      return [{ plaintext: Buffer.alloc(32, 9) }];
-    },
-    async close() {},
-  };
-  const provider = createRegionalEnvelopeKeyProvider(
-    { region: "ng", keyResource },
-    { kmsClient }
-  );
-  const reference = await provider.currentKeyReference();
-  const wrapped = await provider.wrapKey(Buffer.alloc(32, 1), reference);
-  assert.equal(wrapped.toString(), "wrapped");
-  assert.equal((await provider.unwrapKey(wrapped, reference)).length, 32);
-  await assert.rejects(provider.wrapKey(Buffer.alloc(31), reference), /unavailable/);
-  assert.deepEqual(calls.map(([name]) => name), ["get", "encrypt", "decrypt"]);
-});
-
-test("KMS authentication accepts external-account WIF and rejects service-account keys", () => {
-  assert.equal(
-    validateExternalAccountWifConfig({
-      type: "external_account",
-      audience: "//iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/ksns/providers/onprem",
-      subject_token_type: "urn:ietf:params:oauth:token-type:jwt",
-      token_url: "https://sts.googleapis.com/v1/token",
-      credential_source: { file: "/run/ksns/subject-token" },
-    }).type,
-    "external_account"
-  );
-  assert.throws(() =>
-    validateExternalAccountWifConfig({
-      type: "service_account",
-      private_key: "synthetic-forbidden",
-      client_email: "forbidden@synthetic.invalid",
-    })
-  );
+test("production config rejects malformed key rotation metadata", () => {
+  for (const overrides of [
+    { K_SNS_TRANSACTION_KEK_CURRENT_VERSION: "v0" },
+    { K_SNS_TRANSACTION_KEK_CURRENT_VERSION: "2" },
+    { K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION: "v0" },
+  ]) {
+    assert.throws(() => loadProductionAuthConfig({ ...environment("ng"), ...overrides }));
+  }
 });
 
 test("Cloud client uses exact operation endpoints and never follows redirects", async () => {
@@ -249,6 +196,6 @@ test("synthetic production composition closes every owned client once", async ()
   assert.equal(closeCount, 1);
 });
 
-test("source evidence is synthetic and performs no PostgreSQL, KMS, certificate, or Cloud provisioning", () => {
+test("source evidence is synthetic and performs no PostgreSQL, credential, certificate, or Cloud provisioning", () => {
   assert.equal(process.env.K_SNS_AUTH_RUNTIME, undefined);
 });

@@ -6,3 +6,6 @@ node_modules
 .next
 tests
 *.log
+*.cred
+credstore.encrypted
+credentials

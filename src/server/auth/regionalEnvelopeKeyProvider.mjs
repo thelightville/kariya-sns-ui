@@ -1,122 +1,189 @@
 import { Buffer } from "node:buffer";
-import { readFileSync } from "node:fs";
-
-import { KeyManagementServiceClient } from "@google-cloud/kms";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createSecretKey,
+  randomBytes,
+} from "node:crypto";
+import { lstatSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 
 import { productionRegionDefinition } from "./productionConfig.mjs";
+
+export const SYSTEMD_CURRENT_CREDENTIAL = "ksns-transaction-kek-current";
+export const SYSTEMD_PREVIOUS_CREDENTIAL = "ksns-transaction-kek-previous";
+export const SYSTEMD_WRAP_PROFILE = "ksns.systemd-credential-dek-wrap.v1";
+export const PREAUTHORIZATION_TENANT_SCOPE = "cloud-preauthorization-pending";
+export const TRANSACTION_WRAP_PURPOSE = "ksns-auth-transaction-dek";
 
 function fail() {
   throw new Error("cloud_auth_runtime_unavailable");
 }
 
-function validateKeyResource(region, keyResource) {
-  const definition = productionRegionDefinition(region);
-  const match = /^projects\/[^/]+\/locations\/([^/]+)\/keyRings\/[^/]+\/cryptoKeys\/[^/]+$/u.exec(
-    keyResource
-  );
-  if (!match || match[1] !== definition.kms_location) fail();
-}
-
-export function validateExternalAccountWifConfig(value) {
+function exactKeys(value, names) {
   if (
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    value.type !== "external_account" ||
-    typeof value.audience !== "string" ||
-    !value.audience.startsWith("//iam.googleapis.com/") ||
-    value.subject_token_type !== "urn:ietf:params:oauth:token-type:jwt" ||
-    value.token_url !== "https://sts.googleapis.com/v1/token" ||
-    value.credential_source === null ||
-    typeof value.credential_source !== "object" ||
-    "private_key" in value ||
-    "private_key_id" in value ||
-    "client_email" in value
+    Object.keys(value).sort().join(",") !== [...names].sort().join(",")
   ) {
     fail();
   }
-  return value;
 }
 
-function createWifKmsClient(path) {
-  try {
-    validateExternalAccountWifConfig(JSON.parse(readFileSync(path, "utf8")));
-    return new KeyManagementServiceClient({ keyFilename: path });
-  } catch {
+function canonicalWrapContext(reference, context) {
+  exactKeys(context, ["aad_sha256", "purpose", "region", "tenant"]);
+  if (
+    context.tenant !== PREAUTHORIZATION_TENANT_SCOPE ||
+    context.purpose !== TRANSACTION_WRAP_PURPOSE ||
+    context.region !== reference.region ||
+    typeof context.aad_sha256 !== "string" ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(context.aad_sha256)
+  ) {
+    fail();
+  }
+  return Buffer.from(
+    JSON.stringify([
+      SYSTEMD_WRAP_PROFILE,
+      reference.key_id,
+      reference.key_version,
+      context.tenant,
+      context.region,
+      context.purpose,
+      context.aad_sha256,
+    ]),
+    "utf8"
+  );
+}
+
+function assertCredentialMetadata(directory, path, fs, expectedUid) {
+  if (!isAbsolute(directory)) fail();
+  const directoryMetadata = fs.statSync(directory);
+  const linkMetadata = fs.lstatSync(path);
+  const fileMetadata = fs.statSync(path);
+  if (
+    !Number.isSafeInteger(expectedUid) ||
+    expectedUid < 1 ||
+    !directoryMetadata.isDirectory() ||
+    directoryMetadata.uid !== expectedUid ||
+    (directoryMetadata.mode & 0o077) !== 0 ||
+    linkMetadata.isSymbolicLink() ||
+    !fileMetadata.isFile() ||
+    fileMetadata.uid !== expectedUid ||
+    (fileMetadata.mode & 0o777) !== 0o400 ||
+    fileMetadata.size !== 32
+  ) {
     fail();
   }
 }
 
+function loadCredential(directory, credentialName, metadata, fs, expectedUid) {
+  const path = join(directory, credentialName);
+  let plaintext;
+  try {
+    assertCredentialMetadata(directory, path, fs, expectedUid);
+    plaintext = fs.readFileSync(path);
+    if (!Buffer.isBuffer(plaintext) || plaintext.length !== 32) fail();
+    return {
+      ...metadata,
+      credential_name: credentialName,
+      key: createSecretKey(plaintext),
+    };
+  } catch {
+    fail();
+  } finally {
+    if (Buffer.isBuffer(plaintext)) plaintext.fill(0);
+  }
+}
+
+function referenceKey(reference) {
+  return `${reference?.key_id ?? ""}\u0000${reference?.key_version ?? ""}`;
+}
+
 export function createRegionalEnvelopeKeyProvider(
-  { region, keyResource, wifConfigPath },
-  { kmsClient } = {}
+  { region, credentialDirectory, keyId, currentVersion, previousVersion = null },
+  {
+    fs = { lstatSync, readFileSync, statSync },
+    random = randomBytes,
+    expectedUid = typeof process.getuid === "function" ? process.getuid() : null,
+  } = {}
 ) {
-  validateKeyResource(region, keyResource);
-  kmsClient ??= createWifKmsClient(wifConfigPath);
-  if (!kmsClient || typeof kmsClient.getCryptoKey !== "function") fail();
+  productionRegionDefinition(region);
+  const expectedKeyId = `ksns-auth-${region}-transaction-kek`;
+  if (
+    keyId !== expectedKeyId ||
+    !/^v[1-9][0-9]{0,8}$/u.test(currentVersion) ||
+    (previousVersion !== null &&
+      (!/^v[1-9][0-9]{0,8}$/u.test(previousVersion) ||
+        Number(previousVersion.slice(1)) >= Number(currentVersion.slice(1))))
+  ) {
+    fail();
+  }
+
+  const records = [
+    loadCredential(
+      credentialDirectory,
+      SYSTEMD_CURRENT_CREDENTIAL,
+      { region, key_id: keyId, key_version: currentVersion },
+      fs,
+      expectedUid
+    ),
+  ];
+  if (previousVersion !== null) {
+    records.push(
+      loadCredential(
+        credentialDirectory,
+        SYSTEMD_PREVIOUS_CREDENTIAL,
+        { region, key_id: keyId, key_version: previousVersion },
+        fs,
+        expectedUid
+      )
+    );
+  }
+  const byReference = new Map(
+    records.map((record) => [referenceKey(record), record])
+  );
+  let closed = false;
+
+  function recordFor(reference) {
+    if (closed) fail();
+    const record = byReference.get(referenceKey(reference));
+    if (!record || record.region !== region || !record.key) fail();
+    return record;
+  }
 
   return Object.freeze({
     async currentKeyReference() {
-      try {
-        const [key] = await kmsClient.getCryptoKey({ name: keyResource });
-        const version = key?.primary?.name;
-        if (
-          typeof version !== "string" ||
-          !version.startsWith(`${keyResource}/cryptoKeyVersions/`) ||
-          key.primary.protectionLevel !== "HSM" ||
-          key.primary.state !== "ENABLED" ||
-          key.primary.algorithm !== "GOOGLE_SYMMETRIC_ENCRYPTION"
-        ) {
-          fail();
-        }
-        return Object.freeze({ key_id: keyResource, key_version: version });
-      } catch {
-        fail();
-      }
+      if (closed) fail();
+      return Object.freeze({ key_id: keyId, key_version: currentVersion });
     },
 
-    async wrapKey(dataKey, reference) {
-      if (
-        !Buffer.isBuffer(dataKey) ||
-        dataKey.length !== 32 ||
-        reference?.key_id !== keyResource ||
-        !reference?.key_version?.startsWith(`${keyResource}/cryptoKeyVersions/`)
-      ) {
-        fail();
-      }
-      try {
-        const [result] = await kmsClient.encrypt({
-          name: keyResource,
-          plaintext: dataKey,
-        });
-        if (
-          result?.name !== reference.key_version ||
-          !result.ciphertext ||
-          Buffer.from(result.ciphertext).length === 0
-        ) {
-          fail();
-        }
-        return Buffer.from(result.ciphertext);
-      } catch {
-        fail();
-      }
+    async wrapKey(dataKey, reference, context) {
+      const record = recordFor(reference);
+      if (!Buffer.isBuffer(dataKey) || dataKey.length !== 32) fail();
+      const iv = random(12);
+      if (!Buffer.isBuffer(iv) || iv.length !== 12) fail();
+      const cipher = createCipheriv("aes-256-gcm", record.key, iv);
+      cipher.setAAD(canonicalWrapContext(record, context));
+      const ciphertext = Buffer.concat([cipher.update(dataKey), cipher.final()]);
+      return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]);
     },
 
-    async unwrapKey(wrappedKey, reference) {
-      if (
-        !Buffer.isBuffer(wrappedKey) ||
-        wrappedKey.length === 0 ||
-        reference?.key_id !== keyResource ||
-        !reference?.key_version?.startsWith(`${keyResource}/cryptoKeyVersions/`)
-      ) {
-        fail();
-      }
+    async unwrapKey(wrappedKey, reference, context) {
+      const record = recordFor(reference);
+      if (!Buffer.isBuffer(wrappedKey) || wrappedKey.length !== 60) fail();
       try {
-        const [result] = await kmsClient.decrypt({
-          name: keyResource,
-          ciphertext: wrappedKey,
-        });
-        const plaintext = Buffer.from(result?.plaintext ?? []);
+        const decipher = createDecipheriv(
+          "aes-256-gcm",
+          record.key,
+          wrappedKey.subarray(0, 12)
+        );
+        decipher.setAAD(canonicalWrapContext(record, context));
+        decipher.setAuthTag(wrappedKey.subarray(12, 28));
+        const plaintext = Buffer.concat([
+          decipher.update(wrappedKey.subarray(28)),
+          decipher.final(),
+        ]);
         if (plaintext.length !== 32) fail();
         return plaintext;
       } catch {
@@ -125,11 +192,14 @@ export function createRegionalEnvelopeKeyProvider(
     },
 
     async assertReady() {
-      await this.currentKeyReference();
+      if (closed || records.length < 1) fail();
     },
 
     async close() {
-      if (typeof kmsClient.close === "function") await kmsClient.close();
+      if (closed) return;
+      closed = true;
+      for (const record of records) record.key = null;
+      byReference.clear();
     },
   });
 }
