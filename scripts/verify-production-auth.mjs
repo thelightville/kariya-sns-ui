@@ -58,7 +58,7 @@ if (
   failures.push("login page must use only the Cloud exchange start route");
 }
 if (
-  !startRoute.includes("runtime.exchange.start") ||
+  !startRoute.includes("authRuntime.exchange.start") ||
   !callbackRoute.includes('keys.join(",") !== "code,state"') ||
   !callbackRoute.includes("hostLocalSessionCookie")
 ) {
