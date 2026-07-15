@@ -1,5 +1,13 @@
 -- Source-only K-SNS Cloud-auth transaction custody.
 -- Application is separately gated; this migration is not applied by this PR.
+CREATE TABLE ksns_auth_schema_head (
+  singleton boolean PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+  schema_head text NOT NULL CHECK (schema_head = 'ksns-auth-transaction-0001')
+);
+
+INSERT INTO ksns_auth_schema_head (singleton, schema_head)
+VALUES (TRUE, 'ksns-auth-transaction-0001');
+
 CREATE TABLE ksns_auth_transactions (
   schema_version text NOT NULL CHECK (schema_version = 'ksns.auth-transaction.v1'),
   id uuid PRIMARY KEY,

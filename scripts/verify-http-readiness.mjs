@@ -48,6 +48,7 @@ const child = spawn(
       NODE_ENV: "production",
       KARIYA_SNS_PUBLIC_ORIGIN: origin,
       KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN: "1",
+      K_SNS_AUTH_RUNTIME: "unavailable-test-default",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -86,6 +87,7 @@ try {
   });
   assert.equal(start.status, 503);
   assert.equal(start.headers.get("set-cookie"), null);
+  assert.equal(start.headers.get("cache-control"), "no-store");
 
   const protectedRoutes = ["/workflow", "/actions", "/incidents", "/overview"];
   for (const pathname of protectedRoutes) {

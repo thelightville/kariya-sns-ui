@@ -6,6 +6,12 @@ import {
   unavailableTransactionStore,
 } from "./ports.mjs";
 import { createSessionAuthority } from "./sessionAuthority.mjs";
+import {
+  loadProductionAuthConfig,
+  productionRuntimeRequested,
+} from "./productionConfig.mjs";
+import { createProductionAuthComposition } from "./productionRuntime.mjs";
+import { installAuthRuntimeShutdown } from "./runtimeLifecycle.mjs";
 
 export const AUTH_COOKIE_NAME = "sns_token";
 
@@ -78,11 +84,33 @@ export function createAuthRuntime({
   });
 }
 
-const unavailableCloud = unavailableCloudExchangeClient();
+function unavailableRuntime() {
+  const cloud = unavailableCloudExchangeClient();
+  return createAuthRuntime({
+    store: unavailableTransactionStore(),
+    cipher: unavailableTransactionCipher(),
+    cloud,
+    introspector: unavailableSessionIntrospector(),
+  });
+}
 
-export const authRuntime = createAuthRuntime({
-  store: unavailableTransactionStore(),
-  cipher: unavailableTransactionCipher(),
-  cloud: unavailableCloud,
-  introspector: unavailableSessionIntrospector(),
-});
+export function selectAuthRuntime(
+  env = process.env,
+  { productionFactory = createProductionAuthComposition } = {}
+) {
+  if (!productionRuntimeRequested(env)) {
+    return Object.freeze({ runtime: unavailableRuntime(), composition: null });
+  }
+  try {
+    const config = loadProductionAuthConfig(env);
+    const composition = productionFactory(config, { runtimeFactory: createAuthRuntime });
+    installAuthRuntimeShutdown(composition);
+    return Object.freeze({ runtime: composition.runtime, composition });
+  } catch {
+    return Object.freeze({ runtime: unavailableRuntime(), composition: null });
+  }
+}
+
+const selected = selectAuthRuntime();
+export const authRuntime = selected.runtime;
+export const authRuntimeComposition = selected.composition;

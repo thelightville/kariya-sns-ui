@@ -82,3 +82,37 @@ The SQL migration is not applied. No database, Redis, DNS, certificate, secret,
 deployment, or production runtime is changed by this source branch. Synthetic
 tests exercise interface behavior only; they are not PostgreSQL concurrency,
 KMS custody, HA/failover, certificate, ingress, or production crash evidence.
+
+## Protected production composition (default disabled)
+
+Production is selected only by the protected server setting
+`K_SNS_AUTH_RUNTIME=production`. Any missing or malformed database, regional
+KMS, certificate, key, CA, CRL, origin, or trust setting leaves the unavailable
+runtime selected. No protected setting uses a `NEXT_PUBLIC_` name.
+
+The production adapter uses a TLS-validated Node `pg` pool and performs a
+read-only exact schema-head check before any auth operation. It never runs
+runtime DDL or applies migrations.
+
+NG transaction DEKs are wrapped only by a configured Google Cloud KMS HSM key
+in `africa-south1`; CA uses `northamerica-northeast2`. Exact CryptoKey
+resource names are protected configuration. The official Google Cloud KMS
+client uses Application Default Credentials supplied through Workload Identity
+Federation. Service-account key files and reusable API secrets are not accepted
+by source. Only fresh 32-byte DEKs are encrypted/decrypted; KEKs never enter the
+application.
+
+K-SNS-to-Cloud calls use direct TLS 1.3 mutual authentication with protected
+read-only client-certificate, private-key, CA-bundle, and CRL mounts. The leaf
+must match its private key, be P-256/non-CA, contain exactly the paired regional
+SPIFFE URI SAN and clientAuth EKU, and remain within the 30-day profile. Calls
+have a three-second timeout and 64 KiB body bound, do not use a proxy, do not
+follow redirects, disable keep-alive/session caching, and reload trust material
+for each call. Caller Host/Forwarded headers never select region or identity.
+
+The pool, KMS client and Cloud client expose idempotent shutdown; SIGTERM and
+SIGINT initiate graceful closure. Current/next certificate delivery, trust
+epoch, CRL freshness, revocation, GCP provisioning, database provisioning,
+migration application and deployment remain external release gates. This
+branch contains no certificate, private key, credential or GCP resource and is
+not a production-readiness claim.

@@ -34,6 +34,9 @@ const callbackRoute = read("app", "api", "auth", "exchange", "callback", "route.
 const loginPage = read("app", "login", "page.tsx");
 const proxy = read("proxy.ts");
 const runtime = read("server", "auth", "runtimeComposition.mjs");
+const productionConfig = read("server", "auth", "productionConfig.mjs");
+const cloudClient = read("server", "auth", "cloudMtlsClient.mjs");
+const kms = read("server", "auth", "regionalEnvelopeKeyProvider.mjs");
 
 for (const [label, text] of [["login", loginRoute], ["mfa", mfaRoute]]) {
   for (const forbidden of [
@@ -82,8 +85,30 @@ if (/domain\s*:/iu.test(runtime)) {
   failures.push("host-local sns_token must not set Domain");
 }
 if (!runtime.includes("unavailableTransactionStore()") ||
-    !runtime.includes("unavailableSessionIntrospector()")) {
+    !runtime.includes("unavailableSessionIntrospector()") ||
+    !runtime.includes("productionRuntimeRequested")) {
   failures.push("production composition must remain unavailable by default");
+}
+for (const required of [
+  "K_SNS_AUTH_RUNTIME !== PRODUCTION_RUNTIME_MODE",
+  'kms_location: "africa-south1"',
+  'kms_location: "northamerica-northeast2"',
+  "K_SNS_CLOUD_CLIENT_KEY_PATH",
+  "K_SNS_CLOUD_CA_BUNDLE_PATH",
+  "K_SNS_GCP_WIF_CONFIG_PATH",
+]) {
+  if (!productionConfig.includes(required)) failures.push(`production config missing ${required}`);
+}
+for (const required of [
+  'minVersion: "TLSv1.3"',
+  'maxVersion: "TLSv1.3"',
+  "maxCachedSessions: 0",
+  "keepAlive: false",
+]) {
+  if (!cloudClient.includes(required)) failures.push(`mTLS client missing ${required}`);
+}
+if (!kms.includes('protectionLevel !== "HSM"') || /GOOGLE_APPLICATION_CREDENTIALS/u.test(kms)) {
+  failures.push("KMS must require HSM under ADC without service-account key files");
 }
 
 if (failures.length > 0) {
