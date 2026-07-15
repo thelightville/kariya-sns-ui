@@ -30,6 +30,9 @@ const forbiddenClientMarkers = [
   "K_SNS_TENANT_ID",
   "KARIYA_CLOUD_AUTH_BASE_URL",
   "K_SNS_TRANSACTION_DATABASE_URL",
+  "K_SNS_TRANSACTION_KMS_KEY_RESOURCE",
+  "K_SNS_CLOUD_CLIENT_KEY_PATH",
+  "K_SNS_CLOUD_CA_BUNDLE_PATH",
   "alpha1-stub-session",
 ];
 
