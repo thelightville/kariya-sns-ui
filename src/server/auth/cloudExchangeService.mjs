@@ -20,7 +20,7 @@ import {
   TRANSACTION_WRAP_PURPOSE,
 } from "./regionalEnvelopeKeyProvider.mjs";
 
-const AUTHORIZATION_PATH = "/auth/exchange/authorize";
+const AUTHORIZATION_PATH = "/api/auth/exchange/authorize";
 const RESERVATION_SECONDS = 30;
 
 function fail(message) {
