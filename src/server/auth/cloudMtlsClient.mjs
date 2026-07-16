@@ -21,6 +21,19 @@ function readProtected(path, { privateKey = false } = {}) {
   }
 }
 
+export function certificateValidityWindow(parsed) {
+  const validFrom =
+    parsed.validFromDate instanceof Date
+      ? parsed.validFromDate.getTime()
+      : Date.parse(parsed.validFrom);
+  const validTo =
+    parsed.validToDate instanceof Date
+      ? parsed.validToDate.getTime()
+      : Date.parse(parsed.validTo);
+  if (!Number.isFinite(validFrom) || !Number.isFinite(validTo)) fail();
+  return Object.freeze({ validFrom, validTo });
+}
+
 function validateClientIdentity(cert, key, region) {
   try {
     const definition = productionRegionDefinition(region);
@@ -30,6 +43,7 @@ function validateClientIdentity(cert, key, region) {
       .split(/,\s*/u)
       .filter((value) => value.startsWith("URI:"));
     if (sans.length !== 1 || sans[0] !== `URI:${definition.spiffe_uri}`) fail();
+    const { validFrom, validTo } = certificateValidityWindow(parsed);
     if (
       parsed.ca ||
       /(?:^|\\n)CN=/u.test(parsed.subject) ||
@@ -39,9 +53,9 @@ function validateClientIdentity(cert, key, region) {
       !Array.isArray(parsed.keyUsage) ||
       parsed.keyUsage.length !== 1 ||
       parsed.keyUsage[0] !== "1.3.6.1.5.5.7.3.2" ||
-      parsed.validToDate.getTime() - parsed.validFromDate.getTime() > 2_592_000_000 ||
-      Date.now() < parsed.validFromDate.getTime() ||
-      Date.now() >= parsed.validToDate.getTime()
+      validTo - validFrom > 2_592_000_000 ||
+      Date.now() < validFrom ||
+      Date.now() >= validTo
     ) {
       fail();
     }
