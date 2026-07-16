@@ -7,6 +7,7 @@ import {
 } from "../src/server/auth/productionConfig.mjs";
 import { assertAuthSchemaHead } from "../src/server/auth/nodePostgresPool.mjs";
 import {
+  certificateValidityWindow,
   createCloudMtlsClient,
   parseCloudResponse,
   validateCloudServerIdentity,
@@ -70,6 +71,30 @@ test("private transport and server identity fail closed on drift", () => {
     { K_SNS_CLOUD_MTLS_SERVER_NAME: "console.kariya.ng" },
   ]) {
     assert.throws(() => loadProductionAuthConfig({ ...environment("ng"), ...overrides }));
+  }
+});
+
+test("certificate validity supports Node 20 strings and fails closed on malformed values", () => {
+  const validFrom = "Jul 15 00:00:00 2026 GMT";
+  const validTo = "Aug 14 00:00:00 2026 GMT";
+  const node20 = certificateValidityWindow({ validFrom, validTo });
+  assert.equal(node20.validFrom, Date.parse(validFrom));
+  assert.equal(node20.validTo, Date.parse(validTo));
+
+  const modern = certificateValidityWindow({
+    validFromDate: new Date(validFrom),
+    validToDate: new Date(validTo),
+    validFrom: "ignored",
+    validTo: "ignored",
+  });
+  assert.deepEqual(modern, node20);
+
+  for (const value of [
+    { validFrom: "invalid", validTo },
+    { validFrom, validTo: "invalid" },
+    {},
+  ]) {
+    assert.throws(() => certificateValidityWindow(value), /unavailable/);
   }
 });
 
