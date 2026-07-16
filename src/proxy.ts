@@ -70,5 +70,5 @@ export function proxy(request: NextRequest) {
 export const config = {
   // API auth and BFF routes perform the same fresh Cloud authority check at
   // their own server boundary; static assets never see session material.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth|api/ksns).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/auth|api/ksns).*)"],
 };
