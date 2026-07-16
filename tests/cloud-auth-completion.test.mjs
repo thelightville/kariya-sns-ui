@@ -117,7 +117,7 @@ test("synthetic start and callback preserve exact regional contract and bounded 
   });
   const url = new URL(started.authorization_url);
   assert.equal(url.origin, "https://console.kariya.ng");
-  assert.equal(url.pathname, "/auth/exchange/authorize");
+  assert.equal(url.pathname, "/api/auth/exchange/authorize");
   assert.deepEqual([...url.searchParams.keys()].sort(), ["request_id", "state"]);
   assert.equal(value.registerRequest.state_sha256.length, 43);
   assert.equal(value.registerRequest.code_challenge_method, "S256");
