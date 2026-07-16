@@ -12,7 +12,7 @@ const proxySource = await readFile(proxyUrl, "utf8");
 const { unstable_doesMiddlewareMatch: unstable_doesProxyMatch } =
   proxyTestingUtils;
 const proxyConfig = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth|api/ksns).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/health|api/auth|api/ksns).*)"],
 };
 
 test("protected routes use only the configured paired SNS origin", () => {
@@ -114,6 +114,7 @@ test("Proxy matcher preserves protected-route and BFF exclusions", () => {
     "/_next/static/chunks/app.js",
     "/_next/image",
     "/favicon.ico",
+    "/api/health",
     "/api/auth/login",
     "/api/auth/mfa",
     "/api/ksns/events",
