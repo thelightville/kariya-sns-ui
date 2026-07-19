@@ -71,12 +71,12 @@ and must never be used outside tests.
 
 ## Fail-closed runtime posture
 
-runtimeComposition.mjs deliberately composes only unavailable transaction,
-cipher, Cloud, and introspection adapters. Therefore the checked-in runtime
+runtimeComposition.mjs composes unavailable transaction, cipher, Cloud, and
+introspection adapters by default. Therefore the checked-in production posture
 cannot create a session. Start, callback, protected-cookie, BFF, and logout
 paths return generic unavailable/unauthorized behavior until separately
-authorized production PostgreSQL, systemd credential custody, TLS 1.3 mTLS, Cloud client, and
-introspection adapters are provisioned and tested.
+authorized production PostgreSQL, systemd credential custody, TLS 1.3 mTLS,
+Cloud client, and introspection adapters are provisioned and tested.
 
 The SQL migration is not applied. No database, Redis, DNS, certificate, secret,
 deployment, or production runtime is changed by this source branch. Synthetic
@@ -130,3 +130,27 @@ not a production-readiness claim.
 The offline generation, encrypted recovery, installation, rotation, and rollback
 checklist is in [systemd-credential-custody.md](systemd-credential-custody.md).
 It is an operator plan only and contains no production key material.
+
+## Local founder-review evidence (synthetic only)
+
+A development-only review runtime exists solely to inspect the authenticated UI
+and same-origin BFF without production credentials or customer data. It is
+selected only when every guard below is exact:
+
+- `NODE_ENV=development`;
+- `K_SNS_SYNTHETIC_REVIEW=explicit-loopback-only`;
+- `K_SNS_SYNTHETIC_REVIEW_REGION=ng` or `ca`;
+- `KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN=1`; and
+- `KARIYA_SNS_PUBLIC_ORIGIN=http://127.0.0.1:<explicit-port>`.
+
+The gate rejects production mode, `K_SNS_AUTH_RUNTIME=production`, localhost
+aliases, production SNS origins, missing ports, arbitrary hosts, and mismatched
+regions. It has no persistence or external authority adapter and cannot survive
+a process restart. Sessions and identity are random or fixed synthetic,
+customer-free values. The customer-facing workflow remains labelled synthetic,
+actions remain undispatched, verification remains unavailable, and residual
+risk remains unresolved.
+
+This harness is local evidence, not Cloud authentication, production custody,
+deployment readiness, or an authorization bypass. Default and protected
+production configurations remain fail closed.
