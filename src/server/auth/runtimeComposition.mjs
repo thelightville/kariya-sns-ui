@@ -12,6 +12,11 @@ import {
 } from "./productionConfig.mjs";
 import { createProductionAuthComposition } from "./productionRuntime.mjs";
 import { installAuthRuntimeShutdown } from "./runtimeLifecycle.mjs";
+import {
+  createSyntheticReviewRuntime,
+  syntheticReviewRegion,
+  syntheticReviewRuntimeRequested,
+} from "./syntheticReviewRuntime.mjs";
 
 export const AUTH_COOKIE_NAME = "sns_token";
 
@@ -20,10 +25,12 @@ const REGION_BY_ORIGIN = Object.freeze({
   "https://sns.kariya.ca": "ca",
 });
 
-export function configuredRegion(configuredOrigin) {
+export function configuredRegion(configuredOrigin, env = process.env) {
   const region = REGION_BY_ORIGIN[configuredOrigin];
-  if (!region) throw new Error("cloud_auth_runtime_unavailable");
-  return region;
+  if (region) return region;
+  const syntheticRegion = syntheticReviewRegion(configuredOrigin, env);
+  if (!syntheticRegion) throw new Error("cloud_auth_runtime_unavailable");
+  return syntheticRegion;
 }
 
 export function hostLocalSessionCookie(value, maxAge) {
@@ -96,8 +103,21 @@ function unavailableRuntime() {
 
 export function selectAuthRuntime(
   env = process.env,
-  { productionFactory = createProductionAuthComposition } = {}
+  {
+    productionFactory = createProductionAuthComposition,
+    syntheticFactory = createSyntheticReviewRuntime,
+  } = {}
 ) {
+  if (syntheticReviewRuntimeRequested(env)) {
+    try {
+      return Object.freeze({
+        runtime: syntheticFactory(env),
+        composition: null,
+      });
+    } catch {
+      return Object.freeze({ runtime: unavailableRuntime(), composition: null });
+    }
+  }
   if (!productionRuntimeRequested(env)) {
     return Object.freeze({ runtime: unavailableRuntime(), composition: null });
   }
