@@ -111,6 +111,6 @@ test("invalid synthetic request stays on the unavailable runtime", async () => {
       region: "ng",
       normalized_return_path: "/workflow",
     }),
-    /cloud_authority_unavailable/
+    /unavailable in the source-only consumer foundation/
   );
 });
