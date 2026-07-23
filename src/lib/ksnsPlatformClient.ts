@@ -14,6 +14,7 @@ import type {
   KsnsEvidenceRecord,
   KsnsExplanation,
   KsnsIncident,
+  KsnsKaiAdvisoryHandoffList,
   KsnsKaiExplanationPayload,
   KsnsLifecycleEvidenceBundle,
   KsnsPolicy,
@@ -302,6 +303,27 @@ export const ksnsPlatformClient = {
     request<KsnsExplanation[]>(
       subjectId ? `/explanations?subject_id=${subjectId}` : "/explanations"
     ),
+
+  getKaiAdvisoryHandoffs: (params?: {
+    incidentId?: string;
+    decisionId?: string;
+    correlationId?: string;
+    reviewState?: string;
+    runtimeAvailability?: string;
+    handoffId?: string;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.incidentId) qs.set("incident_id", params.incidentId);
+    if (params?.decisionId) qs.set("decision_id", params.decisionId);
+    if (params?.correlationId) qs.set("correlation_id", params.correlationId);
+    if (params?.reviewState) qs.set("review_state", params.reviewState);
+    if (params?.runtimeAvailability) qs.set("runtime_availability", params.runtimeAvailability);
+    if (params?.handoffId) qs.set("handoff_id", params.handoffId);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<KsnsKaiAdvisoryHandoffList>(`/kai-advisory-handoffs${suffix}`);
+  },
 
   getConnectors: async () => {
     const data = await request<KsnsConnector[] | { connectors?: any[] }>(

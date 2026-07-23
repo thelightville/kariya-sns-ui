@@ -83,6 +83,7 @@ test("K-SNS BFF allowlist permits UI contract routes and blocks mutation/execute
     ],
     ["GET", ["connectors"]],
     ["GET", ["tool-governance"]],
+    ["GET", ["kai-advisory-handoffs"]],
     ["POST", ["decisions", "decision-1", "request-action"]],
     ["POST", ["recommendations", "recommendation-1", "approve"]],
   ];
@@ -96,6 +97,8 @@ test("K-SNS BFF allowlist permits UI contract routes and blocks mutation/execute
     ["POST", ["lifecycle", "actions", "00000000-0000-4000-8000-000000000001", "dispatch"]],
     ["POST", ["lifecycle", "verifications"]],
     ["POST", ["lifecycle", "residual-risk"]],
+    ["POST", ["kai-advisory-handoffs"]],
+    ["GET", ["kai", "v1", "ops", "ksns-handoff"]],
     ["POST", ["connectors"]],
     ["DELETE", ["events"]],
     ["GET", ["api", "openapi.json"]],

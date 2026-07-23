@@ -16,6 +16,8 @@ const ALLOWED_ROUTES = [
   ["GET", /^recommendations$/],
   ["POST", new RegExp(`^recommendations/${SIMPLE_ID_SEGMENT}/(approve|reject|request-action)$`)],
   ["GET", /^explanations$/],
+  ["GET", /^kai-advisory-handoffs$/],
+  ["GET", /^kai-advisory-handoffs\/[^/]+$/],
   ["GET", /^incidents$/],
   ["GET", new RegExp(`^incidents/${UUID_SEGMENT}$`)],
   ["GET", new RegExp(`^incidents/${UUID_SEGMENT}/timeline$`)],

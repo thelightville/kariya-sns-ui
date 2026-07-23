@@ -126,6 +126,69 @@ export interface KsnsExplanation {
   generated_at: string;
 }
 
+export interface KsnsKaiAdvisoryHandoff {
+  handoff_id: string;
+  assessment_id: string;
+  incident_id: string | null;
+  decision_id: string | null;
+  correlation_id: string | null;
+  source_service: string;
+  source_response_id: string | null;
+  severity: string | null;
+  confidence: {
+    score: number;
+    band: "high" | "medium" | "low" | string;
+  };
+  uncertainty_reasons: string[];
+  evidence: {
+    status: "present" | "partial" | "absent" | string;
+    evidence_refs: string[];
+    reference_count: number;
+  };
+  recommended_actions: string[];
+  advisory_summary: string;
+  review: {
+    required: boolean;
+    state: "pending" | "completed" | string;
+    reasons: string[];
+  };
+  runtime: {
+    availability: "available" | "degraded" | "unavailable" | string;
+    detail: string;
+  };
+  provenance: {
+    kai_version: string;
+    model_version: string;
+    source_service: string;
+    source_response_id: string | null;
+    contract_version: string;
+  };
+  unresolved_gates: string[];
+  created_at: string;
+  advisory_only: true;
+  system_of_record: "kariya-sns";
+  decision_authority: "kariya-sns";
+  orchestration_owner: "kariya-sns";
+  enforcement_lifecycle_owner: "kariya-sns";
+  execution_status: "advisory_only" | "review_required" | string;
+  verification_status: "not_claimed" | string;
+  private_payload_available: false;
+  browser_to_kai_allowed: false;
+}
+
+export interface KsnsKaiAdvisoryHandoffList {
+  tenant_id: string;
+  count: number;
+  filters: Record<string, string | null>;
+  handoffs: KsnsKaiAdvisoryHandoff[];
+  boundary: {
+    kai_role: "advisory_reasoning_only";
+    system_of_record: "kariya-sns";
+    browser_to_kai_allowed: false;
+    direct_enforcement_allowed: false;
+  };
+}
+
 export interface KsnsConnector {
   connector_id: string;
   id?: string;

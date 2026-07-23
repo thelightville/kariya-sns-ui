@@ -41,6 +41,7 @@ K-SNS UI can exist as a dedicated SOC/security-operations surface, but it must n
 - **Trust & Risk** — current trust score, derived risk display, asset buckets, contributing event/incident/action availability, and timeline surface.
 - **Connectors & Telemetry** — KIF connector inventory, health, ingestion, auth/config status without secrets, supported telemetry/actions, readiness, and MCP/tool-governance reserved state.
 - **Evidence & Explanation** — normalized events with correlation, trust/risk movement, decision/action, dispatch, verification, residual risk, and KAI explanation columns. Missing backend fields stay pending.
+- **KAI Advisories** — accepted KAI advisory handoffs from K-SNS only, showing confidence, uncertainty, evidence refs, review gates, runtime/provenance, incident/decision correlation, and explicit advisory-only ownership.
 
 No page fabricates incident counts, connector readiness, MCP telemetry, KAI explanations, action success, verification success, DNS completion, or production readiness.
 
@@ -60,6 +61,7 @@ Currently used BFF routes:
 | Decisions/actions | `GET /api/ksns/decisions` | `GET /decisions` | Implemented in C-009 UI API |
 | Recommendations | `GET /api/ksns/recommendations` | `GET /recommendations` | Implemented in C-009 UI API |
 | KAI explanations | `GET /api/ksns/explanations` | `GET /explanations` | Implemented in C-009 UI API |
+| KAI advisory handoffs | `GET /api/ksns/kai-advisory-handoffs` | `GET /kai-advisory-handoffs` | Tenant-scoped K-SNS-owned advisory projection |
 | Incidents | `GET /api/ksns/incidents`, `GET /api/ksns/incidents/{id}`, `GET /api/ksns/incidents/{id}/timeline` | Incident lifecycle endpoints | Backend-driven, no fabricated records |
 | Actions | `GET /api/ksns/actions/?tenant_id=...` | `GET /actions/?tenant_id=...` | Tenant scoped; empty/unavailable state is honest |
 | Connectors | `GET /api/ksns/connectors/?tenant_id=...` | `GET /connectors/?tenant_id=...` | Tenant scoped; readiness is backend-driven |
@@ -132,7 +134,7 @@ Next 16 Proxy redirect construction uses the server-only `KARIYA_SNS_PUBLIC_ORIG
 
 The minimum cross-product journey is intentionally narrow:
 
-- KAI advisory content reaches K-SNS through a future server-side contract and K-SNS lifecycle record; the UI reads K-SNS-owned explanation data through `/api/ksns/explanations`. The browser never calls KAI directly.
+- KAI advisory content reaches K-SNS through the server-side KAI/K-SNS handoff contract and K-SNS lifecycle record; the UI reads K-SNS-owned advisory projections through `/api/ksns/kai-advisory-handoffs` and explanation data through `/api/ksns/explanations`. The browser never calls KAI directly, and degraded/unavailable KAI results stay review-gated rather than approved, executed, enforced, or verified.
 - A KES-targeted K-SNS action may link from authenticated `/actions` to the paired regional Console `/products/kes/response-orchestration` view using `kes.console-review.v1`. Action and incident IDs are lookup hints only; Cloud must re-resolve them under tenant/role authority. The link is posture review only and does not dispatch, execute, or verify.
 
 Deployment sequencing is mandatory even when this source branch is green:
