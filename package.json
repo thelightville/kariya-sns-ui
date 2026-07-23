@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "verify:public-bff": "node scripts/verify-public-bff.mjs",
     "verify:auth": "node scripts/verify-production-auth.mjs",
-    "verify:http": "node scripts/verify-http-readiness.mjs"
+    "verify:http": "node scripts/verify-http-readiness.mjs",
+    "verify:external": "node scripts/verify-external-sns-readiness.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.460.0",

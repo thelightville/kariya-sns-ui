@@ -147,7 +147,23 @@ No merge, deployment, DNS/routing change, Cloud session/RBAC implementation, KES
 ```bash
 npm run build
 npm run lint
+npm run verify:public-bff
+npm run verify:auth
+npm run verify:http
 ```
+
+For authorized read-only public evidence, run:
+
+```bash
+npm run verify:external
+```
+
+`verify:external` checks the owned `https://sns.kariya.ng` and
+`https://sns.kariya.ca` origins by default. It requires protected page routes to
+redirect to login and unauthenticated `GET /api/ksns/events` to fail closed with
+`401`, so regional timeouts or public BFF exposure block deployment-readiness
+claims. Override the target list only for controlled evidence with
+`SNS_EXTERNAL_ORIGINS=https://sns.kariya.ng,https://sns.kariya.ca`.
 
 ## Known Gaps
 
