@@ -93,6 +93,7 @@ See [`.env.example`](.env.example).
 | Variable | Description |
 |---|---|
 | `K_SNS_BASE_URL` | Server-side K-SNS API base URL used only by `/api/ksns/*`. Never expose it as `NEXT_PUBLIC_*`. |
+| `K_SNS_BFF_UPSTREAM_TIMEOUT_MS` | Server-side BFF upstream timeout. Defaults to `5000`; invalid values fail closed with `503` and stalled backend calls return `504`. |
 | `K_SNS_TENANT_ID` | Optional server-side tenant header forwarded by the BFF where needed. |
 | `KARIYA_SNS_PUBLIC_ORIGIN` | Server-only canonical auth-redirect origin. Production accepts only the exact regional `https://sns.kariya.ng` or `https://sns.kariya.ca` origin. |
 | `KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN` | Local-evidence gate only. Must remain disabled for every `sns.*` deployment. |

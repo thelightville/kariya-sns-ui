@@ -15,6 +15,8 @@ import {
 } from "@/server/auth/runtimeComposition.mjs";
 
 const API_BASE = process.env.K_SNS_BASE_URL ?? "";
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 5_000;
+const MAX_UPSTREAM_TIMEOUT_MS = 30_000;
 
 type RouteContext = {
   params: Promise<{ path?: string[] }>;
@@ -25,6 +27,16 @@ function jsonError(message: string, status: number) {
     { error: message },
     { status, headers: { "cache-control": "no-store" } }
   );
+}
+
+function configuredUpstreamTimeoutMs() {
+  const raw = process.env.K_SNS_BFF_UPSTREAM_TIMEOUT_MS;
+  if (!raw) return DEFAULT_UPSTREAM_TIMEOUT_MS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 100 || value > MAX_UPSTREAM_TIMEOUT_MS) {
+    return null;
+  }
+  return value;
 }
 
 function buildTargetUrl(request: NextRequest, path: string[]) {
@@ -70,6 +82,12 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
   }
 
   const hasBody = !["GET", "HEAD"].includes(method);
+  const timeoutMs = configuredUpstreamTimeoutMs();
+  if (timeoutMs === null) {
+    return jsonError("K-SNS BFF timeout configuration is invalid.", 503);
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let upstream: Response;
   try {
     upstream = await fetch(target, {
@@ -77,9 +95,15 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
       headers,
       body: hasBody ? await request.text() : undefined,
       cache: "no-store",
+      signal: controller.signal,
     });
   } catch {
+    if (controller.signal.aborted) {
+      return jsonError("K-SNS backend timed out.", 504);
+    }
     return jsonError("K-SNS backend is unavailable.", 502);
+  } finally {
+    clearTimeout(timeout);
   }
 
   const responseHeaders = new Headers({ "cache-control": "no-store" });
