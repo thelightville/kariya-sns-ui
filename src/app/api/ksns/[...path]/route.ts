@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { isKsnsBffRequestAllowed } from "@/lib/ksnsBffAllowlist.mjs";
 import {
   buildBffContext,
   stripInboundAuthorityHeaders,
@@ -26,11 +27,14 @@ function jsonError(message: string, status: number) {
   );
 }
 
-function buildTargetUrl(path: string[]) {
+function buildTargetUrl(request: NextRequest, path: string[]) {
   if (!API_BASE) return null;
   const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
   const suffix = path.map(encodeURIComponent).join("/");
   const target = new URL(`${base}/${suffix}`);
+  new URL(request.url).searchParams.forEach((value, key) => {
+    target.searchParams.append(key, value);
+  });
   return ["http:", "https:"].includes(target.protocol) ? target : null;
 }
 
@@ -48,7 +52,12 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
   }
 
   const { path = [] } = await context.params;
-  const target = buildTargetUrl(path);
+  const method = request.method.toUpperCase();
+  if (!isKsnsBffRequestAllowed(method, path)) {
+    return jsonError("K-SNS BFF route is not available.", 404);
+  }
+
+  const target = buildTargetUrl(request, path);
   if (!target) return jsonError("K-SNS backend is unavailable.", 503);
 
   const requestId = randomBytes(32).toString("base64url");
@@ -60,7 +69,6 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
     headers.set(name, value);
   }
 
-  const method = request.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
   let upstream: Response;
   try {

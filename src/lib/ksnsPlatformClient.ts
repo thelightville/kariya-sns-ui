@@ -175,8 +175,7 @@ function normaliseAction(raw: any): KsnsAction {
 
 function normaliseConnector(raw: any): KsnsConnector {
   const enabled = raw.enabled;
-  const lastSeen = raw.last_seen ?? raw.last_event_at ?? raw.last_ingestion ?? raw.last_sync ?? null;
-  const status = raw.status ?? (enabled === false ? "disconnected" : lastSeen ? "connected" : "pending");
+  const status = raw.status ?? raw.health_status ?? (enabled === false ? "disconnected" : "pending");
   return {
     connector_id: raw.connector_id ?? raw.id,
     id: raw.id,
@@ -185,8 +184,8 @@ function normaliseConnector(raw: any): KsnsConnector {
     connector_type: raw.connector_type,
     source_system: raw.source_system ?? raw.connector_type,
     status,
-    health_status: raw.health_status ?? (status === "connected" ? "healthy" : status),
-    readiness: raw.readiness ?? (status === "connected" ? "configured" : status),
+    health_status: raw.health_status ?? (enabled === false ? "disconnected" : "pending"),
+    readiness: raw.readiness ?? "pending",
     enabled,
     auth_status: raw.auth_status ?? "unknown",
     events_24h: raw.events_24h ?? raw.events_received ?? 0,

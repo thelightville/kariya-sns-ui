@@ -64,7 +64,7 @@ Currently used BFF routes:
 | Actions | `GET /api/ksns/actions/?tenant_id=...` | `GET /actions/?tenant_id=...` | Tenant scoped; empty/unavailable state is honest |
 | Connectors | `GET /api/ksns/connectors/?tenant_id=...` | `GET /connectors/?tenant_id=...` | Tenant scoped; readiness is backend-driven |
 | SOC metrics | `GET /api/ksns/soc/metrics?tenant_id=...` | `GET /soc/metrics?tenant_id=...` | Client-ready; not required by dashboard render |
-| MCP/tool governance | `GET /api/ksns/tool-governance` | `GET /tool-governance` | Reserved/pending backend dependency |
+| MCP/tool governance | `GET /api/ksns/tool-governance` | `GET /tool-governance` | Backend-driven MCP/tool misuse visibility |
 
 Unsupported or partially supported fields are displayed as unavailable or pending.
 ## DNS And API Treatment
@@ -151,7 +151,7 @@ npm run lint
 
 ## Known Gaps
 
-- MCP/tool-governance has normalized telemetry examples in K-SNS, but no dedicated UI inventory endpoint yet.
+- MCP/tool-governance depends on backend-returned MCP/tool misuse records; empty state means no visible records, not proof of no misuse.
 - Connector inventory requires tenant-scoped backend configuration and does not imply live readiness without health/ingestion data.
 - Action verification and dispatch result fields display only when returned by the backend.
 - Incident detail depth depends on backend module fields; missing correlation/evidence/action fields remain pending.
