@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BrainCircuit,
   FileCog,
   FolderKanban,
   GitBranch,
@@ -31,6 +32,7 @@ const NAV = [
   { href: "/decisions", label: "Decisions", icon: GitBranch },
   { href: "/recommendations", label: "Recommendations", icon: Sparkles },
   { href: "/explanations", label: "KAI Explanations", icon: MessageSquareText },
+  { href: "/kai-advisories", label: "KAI Advisories", icon: BrainCircuit },
   { href: "/policies", label: "Policies", icon: FileCog },
 ];
 

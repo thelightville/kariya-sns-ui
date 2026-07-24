@@ -40,7 +40,8 @@ K-SNS UI can exist as a dedicated SOC/security-operations surface, but it must n
 - **Autonomous Actions** — action ID, incident link, action type, target, enforcement surface, decision mode, policy authority, confidence, dispatch, verification, residual risk, and timestamp where backend fields exist.
 - **Trust & Risk** — current trust score, derived risk display, asset buckets, contributing event/incident/action availability, and timeline surface.
 - **Connectors & Telemetry** — KIF connector inventory, health, ingestion, auth/config status without secrets, supported telemetry/actions, readiness, and MCP/tool-governance reserved state.
-- **Evidence & Explanation** — normalized events with correlation, trust/risk movement, decision/action, dispatch, verification, residual risk, and KAI explanation columns. Missing backend fields stay pending.
+- **Evidence & Explanation** — normalized events plus a bounded evidence-lifecycle chain: source event -> incident -> KAI advisory -> decision -> proposed action -> approval/review -> execution evidence -> verification -> residual risk. Missing lifecycle stages remain unavailable, not fabricated.
+- **KAI Advisories** — accepted KAI advisory handoffs from K-SNS only, showing confidence, uncertainty, evidence refs, review gates, runtime/provenance, incident/decision correlation, and explicit advisory-only ownership.
 
 No page fabricates incident counts, connector readiness, MCP telemetry, KAI explanations, action success, verification success, DNS completion, or production readiness.
 
@@ -60,13 +61,21 @@ Currently used BFF routes:
 | Decisions/actions | `GET /api/ksns/decisions` | `GET /decisions` | Implemented in C-009 UI API |
 | Recommendations | `GET /api/ksns/recommendations` | `GET /recommendations` | Implemented in C-009 UI API |
 | KAI explanations | `GET /api/ksns/explanations` | `GET /explanations` | Implemented in C-009 UI API |
+| KAI advisory handoffs | `GET /api/ksns/kai-advisory-handoffs` | `GET /kai-advisory-handoffs` | Tenant-scoped K-SNS-owned advisory projection |
 | Incidents | `GET /api/ksns/incidents`, `GET /api/ksns/incidents/{id}`, `GET /api/ksns/incidents/{id}/timeline` | Incident lifecycle endpoints | Backend-driven, no fabricated records |
-| Actions | `GET /api/ksns/actions/?tenant_id=...` | `GET /actions/?tenant_id=...` | Tenant scoped; empty/unavailable state is honest |
-| Connectors | `GET /api/ksns/connectors/?tenant_id=...` | `GET /connectors/?tenant_id=...` | Tenant scoped; readiness is backend-driven |
-| SOC metrics | `GET /api/ksns/soc/metrics?tenant_id=...` | `GET /soc/metrics?tenant_id=...` | Client-ready; not required by dashboard render |
-| MCP/tool governance | `GET /api/ksns/tool-governance` | `GET /tool-governance` | Reserved/pending backend dependency |
+| Actions | `GET /api/ksns/actions/` | `GET /actions/` | Tenant scope comes only from server-derived BFF context |
+| Connectors | `GET /api/ksns/connectors/` | `GET /connectors/` | Tenant scope comes only from server-derived BFF context; readiness is backend-driven |
+| SOC metrics | `GET /api/ksns/soc/metrics` | `GET /soc/metrics` | Tenant scope comes only from server-derived BFF context |
+| MCP/tool governance | `GET /api/ksns/tool-governance` | `GET /tool-governance` | Backend-driven MCP/tool misuse visibility |
+| Policies | `GET /api/ksns/policy/rules` | `GET /policy/rules` | Tenant scope comes only from server-derived BFF context |
 
 Unsupported or partially supported fields are displayed as unavailable or pending.
+
+The evidence lifecycle projection is K-SNS-owned. KAI advisory is not a K-SNS
+decision, approval, enforcement or verification record. Proposed or approved
+actions remain unexecuted until source-owned KES/KEA/KIF execution evidence
+exists, and verification remains unavailable until K-SNS records verification
+evidence. Browser access stays behind the same-origin `/api/ksns/*` BFF.
 ## DNS And API Treatment
 
 Primary product portals:
@@ -93,14 +102,20 @@ See [`.env.example`](.env.example).
 | Variable | Description |
 |---|---|
 | `K_SNS_BASE_URL` | Server-side K-SNS API base URL used only by `/api/ksns/*`. Never expose it as `NEXT_PUBLIC_*`. |
-| `K_SNS_TENANT_ID` | Optional server-side tenant header forwarded by the BFF where needed. |
+| `K_SNS_BFF_UPSTREAM_TIMEOUT_MS` | Server-side BFF upstream timeout. Defaults to `5000`; invalid values fail closed with `503` and stalled backend calls return `504`. |
 | `KARIYA_SNS_PUBLIC_ORIGIN` | Server-only canonical auth-redirect origin. Production accepts only the exact regional `https://sns.kariya.ng` or `https://sns.kariya.ca` origin. |
 | `KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN` | Local-evidence gate only. Must remain disabled for every `sns.*` deployment. |
-| `NEXT_PUBLIC_KSNS_TENANT_ID` | Non-secret Alpha 1 tenant hint for tenant-scoped module routes. Leave blank to show unavailable state. |
 | `NEXT_PUBLIC_KSNS_OPERATOR_ID` | Non-secret operator identifier for approval/request payloads where required. |
 | `NEXT_PUBLIC_APP_DOMAIN` | Public K-SNS surface, usually `sns.kariya.ca` or `sns.kariya.ng`. |
 
 No `NEXT_PUBLIC_*` value may contain a credential, secret, or internal backend URL.
+
+The portal never sends tenant authority from `NEXT_PUBLIC_*`, cookies, query
+parameters or browser headers. `/api/ksns/*` strips caller authority inputs and
+adds only server-derived Cloud session context before calling the private K-SNS
+backend. Caller `tenant`, `tenant_id`, `X-Tenant-ID`,
+`X-Kariya-Tenant-ID`, `Forwarded` and `X-Forwarded-*` values cannot override the
+trusted context.
 ## Quick Start
 
 Requirements:
@@ -131,7 +146,7 @@ Next 16 Proxy redirect construction uses the server-only `KARIYA_SNS_PUBLIC_ORIG
 
 The minimum cross-product journey is intentionally narrow:
 
-- KAI advisory content reaches K-SNS through a future server-side contract and K-SNS lifecycle record; the UI reads K-SNS-owned explanation data through `/api/ksns/explanations`. The browser never calls KAI directly.
+- KAI advisory content reaches K-SNS through the server-side KAI/K-SNS handoff contract and K-SNS lifecycle record; the UI reads K-SNS-owned advisory projections through `/api/ksns/kai-advisory-handoffs` and explanation data through `/api/ksns/explanations`. The browser never calls KAI directly, and degraded/unavailable KAI results stay review-gated rather than approved, executed, enforced, or verified.
 - A KES-targeted K-SNS action may link from authenticated `/actions` to the paired regional Console `/products/kes/response-orchestration` view using `kes.console-review.v1`. Action and incident IDs are lookup hints only; Cloud must re-resolve them under tenant/role authority. The link is posture review only and does not dispatch, execute, or verify.
 
 Deployment sequencing is mandatory even when this source branch is green:
@@ -147,11 +162,27 @@ No merge, deployment, DNS/routing change, Cloud session/RBAC implementation, KES
 ```bash
 npm run build
 npm run lint
+npm run verify:public-bff
+npm run verify:auth
+npm run verify:http
 ```
+
+For authorized read-only public evidence, run:
+
+```bash
+npm run verify:external
+```
+
+`verify:external` checks the owned `https://sns.kariya.ng` and
+`https://sns.kariya.ca` origins by default. It requires protected page routes to
+redirect to login and unauthenticated `GET /api/ksns/events` to fail closed with
+`401`, so regional timeouts or public BFF exposure block deployment-readiness
+claims. Override the target list only for controlled evidence with
+`SNS_EXTERNAL_ORIGINS=https://sns.kariya.ng,https://sns.kariya.ca`.
 
 ## Known Gaps
 
-- MCP/tool-governance has normalized telemetry examples in K-SNS, but no dedicated UI inventory endpoint yet.
+- MCP/tool-governance depends on backend-returned MCP/tool misuse records; empty state means no visible records, not proof of no misuse.
 - Connector inventory requires tenant-scoped backend configuration and does not imply live readiness without health/ingestion data.
 - Action verification and dispatch result fields display only when returned by the backend.
 - Incident detail depth depends on backend module fields; missing correlation/evidence/action fields remain pending.

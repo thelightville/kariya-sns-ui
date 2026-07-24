@@ -14,6 +14,7 @@ import type {
   KsnsEvidenceRecord,
   KsnsExplanation,
   KsnsIncident,
+  KsnsKaiAdvisoryHandoffList,
   KsnsKaiExplanationPayload,
   KsnsLifecycleEvidenceBundle,
   KsnsPolicy,
@@ -24,7 +25,6 @@ import type {
 } from "@/types/ksns";
 
 const API_BASE = "/api/ksns";
-const TENANT_ID = process.env.NEXT_PUBLIC_KSNS_TENANT_ID ?? "";
 const OPERATOR_ID = process.env.NEXT_PUBLIC_KSNS_OPERATOR_ID ?? "sns-ui-alpha1";
 
 export class KsnsClientError extends Error {
@@ -86,16 +86,6 @@ async function requestWithFallback<T>(primaryPath: string, fallbackPath: string)
     }
     throw err;
   }
-}
-
-function withTenant(path: string) {
-  if (!TENANT_ID) {
-    throw new KsnsClientError(
-      "NEXT_PUBLIC_KSNS_TENANT_ID is not configured; tenant-scoped K-SNS modules are unavailable."
-    );
-  }
-  const join = path.includes("?") ? "&" : "?";
-  return `${path}${join}tenant_id=${encodeURIComponent(TENANT_ID)}`;
 }
 
 function normaliseIncident(raw: any): KsnsIncident {
@@ -175,8 +165,7 @@ function normaliseAction(raw: any): KsnsAction {
 
 function normaliseConnector(raw: any): KsnsConnector {
   const enabled = raw.enabled;
-  const lastSeen = raw.last_seen ?? raw.last_event_at ?? raw.last_ingestion ?? raw.last_sync ?? null;
-  const status = raw.status ?? (enabled === false ? "disconnected" : lastSeen ? "connected" : "pending");
+  const status = raw.status ?? raw.health_status ?? (enabled === false ? "disconnected" : "pending");
   return {
     connector_id: raw.connector_id ?? raw.id,
     id: raw.id,
@@ -185,8 +174,8 @@ function normaliseConnector(raw: any): KsnsConnector {
     connector_type: raw.connector_type,
     source_system: raw.source_system ?? raw.connector_type,
     status,
-    health_status: raw.health_status ?? (status === "connected" ? "healthy" : status),
-    readiness: raw.readiness ?? (status === "connected" ? "configured" : status),
+    health_status: raw.health_status ?? (enabled === false ? "disconnected" : "pending"),
+    readiness: raw.readiness ?? "pending",
     enabled,
     auth_status: raw.auth_status ?? "unknown",
     events_24h: raw.events_24h ?? raw.events_received ?? 0,
@@ -209,6 +198,11 @@ function summariseLifecycleStatus(status: any) {
     status.verification_status ? `Verify ${status.verification_status}` : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function lifecycleStageRecord(data: any, stage: string) {
+  if (!Array.isArray(data?.evidence_lifecycle)) return null;
+  return data.evidence_lifecycle.find((item: any) => item?.stage === stage)?.record ?? null;
 }
 
 function summariseCorrelation(correlation: unknown) {
@@ -238,7 +232,7 @@ export const ksnsPlatformClient = {
 
   getTrustScore: () => request<KsnsTrustScore>("/trust/score"),
 
-  getSocMetrics: () => request<KsnsSocMetrics>(withTenant("/soc/metrics")),
+  getSocMetrics: () => request<KsnsSocMetrics>("/soc/metrics"),
 
   getDecisions: () => request<KsnsDecision[]>("/decisions"),
   approveDecision: (decisionId: string) =>
@@ -278,8 +272,8 @@ export const ksnsPlatformClient = {
 
   getActions: async () => {
     const data = await requestWithFallback<KsnsAction[] | { actions?: any[]; items?: any[] }>(
-      withTenant("/lifecycle/actions"),
-      withTenant("/actions/")
+      "/lifecycle/actions",
+      "/actions/"
     );
     const items = Array.isArray(data) ? data : data.actions ?? data.items ?? [];
     return items.map(normaliseAction);
@@ -304,18 +298,35 @@ export const ksnsPlatformClient = {
       subjectId ? `/explanations?subject_id=${subjectId}` : "/explanations"
     ),
 
+  getKaiAdvisoryHandoffs: (params?: {
+    incidentId?: string;
+    decisionId?: string;
+    correlationId?: string;
+    reviewState?: string;
+    runtimeAvailability?: string;
+    handoffId?: string;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.incidentId) qs.set("incident_id", params.incidentId);
+    if (params?.decisionId) qs.set("decision_id", params.decisionId);
+    if (params?.correlationId) qs.set("correlation_id", params.correlationId);
+    if (params?.reviewState) qs.set("review_state", params.reviewState);
+    if (params?.runtimeAvailability) qs.set("runtime_availability", params.runtimeAvailability);
+    if (params?.handoffId) qs.set("handoff_id", params.handoffId);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<KsnsKaiAdvisoryHandoffList>(`/kai-advisory-handoffs${suffix}`);
+  },
+
   getConnectors: async () => {
-    const data = await request<KsnsConnector[] | { connectors?: any[] }>(
-      TENANT_ID ? withTenant("/connectors/") : "/connectors"
-    );
+    const data = await request<KsnsConnector[] | { connectors?: any[] }>("/connectors");
     const items = Array.isArray(data) ? data : data.connectors ?? [];
     return items.map(normaliseConnector);
   },
 
   getToolGovernance: () =>
-    request<KsnsToolGovernanceRecord[]>(
-      TENANT_ID ? withTenant("/tool-governance") : "/tool-governance"
-    ),
+    request<KsnsToolGovernanceRecord[]>("/tool-governance"),
 
   getEvidenceRecords: async () => {
     const incidents = await ksnsPlatformClient.getIncidents();
@@ -334,6 +345,7 @@ export const ksnsPlatformClient = {
           const firstAction = lifecycleData.actions?.[0];
           const firstVerification = lifecycleData.verifications?.[0];
           const firstResidual = lifecycleData.residual_risk_records?.[0];
+          const kaiAdvisory = lifecycleStageRecord(evidenceData, "kai_advisory");
 
           return {
             evidence_id: evidenceData?.incident_id ?? incident.incident_id,
@@ -350,10 +362,18 @@ export const ksnsPlatformClient = {
             action_record: firstAction?.action_id ?? null,
             dispatch_result: firstAction?.dispatch_result ?? firstAction?.status ?? null,
             verification_result: firstVerification?.verification_status ?? null,
-            kai_explanation: kaiData?.evidence_bundle_ref ?? evidenceData?.kai_explanation_ref ?? null,
+            kai_explanation:
+              kaiAdvisory?.advisory_summary ??
+              kaiData?.evidence_bundle_ref ??
+              evidenceData?.kai_explanation_ref ??
+              null,
             residual_risk:
               firstResidual?.closure_recommendation ?? lifecycleData.residual_risk ?? null,
             lifecycle_status: summariseLifecycleStatus(evidenceData?.lifecycle_status ?? lifecycleData.lifecycle_status),
+            lifecycle_chain: evidenceData?.evidence_lifecycle ?? [],
+            missing_stages: evidenceData?.missing_stages ?? [],
+            integrity: evidenceData?.integrity ?? null,
+            ownership: evidenceData?.ownership ?? null,
           } satisfies KsnsEvidenceRecord;
         })
       );
@@ -383,7 +403,17 @@ export const ksnsPlatformClient = {
     }));
   },
 
-  getPolicies: () => request<KsnsPolicy[]>("/policies"),
+  getPolicies: async () => {
+    const data = await request<KsnsPolicy[] | { rules?: any[] }>("/policy/rules");
+    const items = Array.isArray(data) ? data : data.rules ?? [];
+    return items.map((raw) => ({
+      policy_id: raw.policy_id ?? raw.id,
+      name: raw.name,
+      description: raw.description ?? raw.rule_type ?? "K-SNS policy rule",
+      state: raw.state ?? (raw.enabled === false ? "retired" : "active"),
+      updated_at: raw.updated_at ?? raw.created_at ?? "unavailable",
+    })) satisfies KsnsPolicy[];
+  },
   requestPolicyActivation: (policyId: string) =>
     request<KsnsPolicy>(`/policies/${policyId}/request-activation`, {
       method: "POST",

@@ -93,7 +93,7 @@ export default function IntegrationsPage() {
           <EmptyState
             icon={Wrench}
             title="MCP telemetry pending"
-            description={`${tools.error} Tool-governance events are supported as normalized telemetry fixtures, but a dedicated UI inventory endpoint is not currently exposed.`}
+            description={`${tools.error} Tool-governance visibility is served only through the same-origin K-SNS BFF; no browser-to-MCP or raw backend calls are made.`}
           />
         )}
         {tools.status === "success" && tools.data.length === 0 && (

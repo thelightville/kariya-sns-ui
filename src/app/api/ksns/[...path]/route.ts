@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { isKsnsBffRequestAllowed } from "@/lib/ksnsBffAllowlist.mjs";
 import {
   buildBffContext,
   stripInboundAuthorityHeaders,
@@ -14,6 +15,15 @@ import {
 } from "@/server/auth/runtimeComposition.mjs";
 
 const API_BASE = process.env.K_SNS_BASE_URL ?? "";
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 5_000;
+const MAX_UPSTREAM_TIMEOUT_MS = 30_000;
+const CALLER_AUTHORITY_QUERY_PARAMS = new Set([
+  "tenant",
+  "tenant_id",
+  "x-tenant-id",
+  "x_kariya_tenant_id",
+  "x-kariya-tenant-id",
+]);
 
 type RouteContext = {
   params: Promise<{ path?: string[] }>;
@@ -26,11 +36,25 @@ function jsonError(message: string, status: number) {
   );
 }
 
-function buildTargetUrl(path: string[]) {
+function configuredUpstreamTimeoutMs() {
+  const raw = process.env.K_SNS_BFF_UPSTREAM_TIMEOUT_MS;
+  if (!raw) return DEFAULT_UPSTREAM_TIMEOUT_MS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 100 || value > MAX_UPSTREAM_TIMEOUT_MS) {
+    return null;
+  }
+  return value;
+}
+
+function buildTargetUrl(request: NextRequest, path: string[]) {
   if (!API_BASE) return null;
   const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
   const suffix = path.map(encodeURIComponent).join("/");
   const target = new URL(`${base}/${suffix}`);
+  new URL(request.url).searchParams.forEach((value, key) => {
+    if (CALLER_AUTHORITY_QUERY_PARAMS.has(key.toLowerCase())) return;
+    target.searchParams.append(key, value);
+  });
   return ["http:", "https:"].includes(target.protocol) ? target : null;
 }
 
@@ -48,7 +72,12 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
   }
 
   const { path = [] } = await context.params;
-  const target = buildTargetUrl(path);
+  const method = request.method.toUpperCase();
+  if (!isKsnsBffRequestAllowed(method, path)) {
+    return jsonError("K-SNS BFF route is not available.", 404);
+  }
+
+  const target = buildTargetUrl(request, path);
   if (!target) return jsonError("K-SNS backend is unavailable.", 503);
 
   const requestId = randomBytes(32).toString("base64url");
@@ -60,8 +89,13 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
     headers.set(name, value);
   }
 
-  const method = request.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
+  const timeoutMs = configuredUpstreamTimeoutMs();
+  if (timeoutMs === null) {
+    return jsonError("K-SNS BFF timeout configuration is invalid.", 503);
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let upstream: Response;
   try {
     upstream = await fetch(target, {
@@ -69,9 +103,15 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
       headers,
       body: hasBody ? await request.text() : undefined,
       cache: "no-store",
+      signal: controller.signal,
     });
   } catch {
+    if (controller.signal.aborted) {
+      return jsonError("K-SNS backend timed out.", 504);
+    }
     return jsonError("K-SNS backend is unavailable.", 502);
+  } finally {
+    clearTimeout(timeout);
   }
 
   const responseHeaders = new Headers({ "cache-control": "no-store" });
