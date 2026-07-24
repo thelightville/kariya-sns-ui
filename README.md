@@ -40,7 +40,7 @@ K-SNS UI can exist as a dedicated SOC/security-operations surface, but it must n
 - **Autonomous Actions** — action ID, incident link, action type, target, enforcement surface, decision mode, policy authority, confidence, dispatch, verification, residual risk, and timestamp where backend fields exist.
 - **Trust & Risk** — current trust score, derived risk display, asset buckets, contributing event/incident/action availability, and timeline surface.
 - **Connectors & Telemetry** — KIF connector inventory, health, ingestion, auth/config status without secrets, supported telemetry/actions, readiness, and MCP/tool-governance reserved state.
-- **Evidence & Explanation** — normalized events with correlation, trust/risk movement, decision/action, dispatch, verification, residual risk, and KAI explanation columns. Missing backend fields stay pending.
+- **Evidence & Explanation** — normalized events plus a bounded evidence-lifecycle chain: source event -> incident -> KAI advisory -> decision -> proposed action -> approval/review -> execution evidence -> verification -> residual risk. Missing lifecycle stages remain unavailable, not fabricated.
 - **KAI Advisories** — accepted KAI advisory handoffs from K-SNS only, showing confidence, uncertainty, evidence refs, review gates, runtime/provenance, incident/decision correlation, and explicit advisory-only ownership.
 
 No page fabricates incident counts, connector readiness, MCP telemetry, KAI explanations, action success, verification success, DNS completion, or production readiness.
@@ -70,6 +70,12 @@ Currently used BFF routes:
 | Policies | `GET /api/ksns/policy/rules` | `GET /policy/rules` | Tenant scope comes only from server-derived BFF context |
 
 Unsupported or partially supported fields are displayed as unavailable or pending.
+
+The evidence lifecycle projection is K-SNS-owned. KAI advisory is not a K-SNS
+decision, approval, enforcement or verification record. Proposed or approved
+actions remain unexecuted until source-owned KES/KEA/KIF execution evidence
+exists, and verification remains unavailable until K-SNS records verification
+evidence. Browser access stays behind the same-origin `/api/ksns/*` BFF.
 ## DNS And API Treatment
 
 Primary product portals:

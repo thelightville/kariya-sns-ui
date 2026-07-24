@@ -311,7 +311,47 @@ export interface KsnsLifecycleEvidenceBundle {
   verification_refs: string[];
   kai_explanation_ref: string | null;
   lifecycle_status?: KsnsLifecycleStatus | null;
+  evidence_lifecycle?: KsnsEvidenceLifecycleStage[];
+  missing_stages?: string[];
+  integrity?: KsnsEvidenceLifecycleIntegrity;
+  ownership?: KsnsEvidenceLifecycleOwnership;
   generated_at: string;
+}
+
+export interface KsnsEvidenceLifecycleStage {
+  stage:
+    | "source_event"
+    | "incident"
+    | "kai_advisory"
+    | "decision"
+    | "proposed_action"
+    | "approval_review"
+    | "execution_evidence"
+    | "verification"
+    | "residual_risk"
+    | string;
+  state: string;
+  available: boolean;
+  record?: Record<string, unknown> | null;
+  missing_reason?: string | null;
+}
+
+export interface KsnsEvidenceLifecycleIntegrity {
+  tenant_scoped: boolean;
+  conflicting_correlation: boolean;
+  conflicting_kai_handoff_ids: string[];
+  kai_advisory_is_decision: false;
+  action_execution_fabricated: false;
+  verification_success_fabricated: false;
+  private_payloads_exposed: false;
+}
+
+export interface KsnsEvidenceLifecycleOwnership {
+  incident_system_of_record: "kariya-sns";
+  decision_authority: "kariya-sns";
+  action_lifecycle_owner: "kariya-sns";
+  enforcement_owner: string;
+  kai_role: "advisory_reasoning_only";
 }
 
 export interface KsnsKaiExplanationPayload {
@@ -358,6 +398,10 @@ export interface KsnsEvidenceRecord {
   kai_explanation?: string | null;
   residual_risk?: string | null;
   lifecycle_status?: string | null;
+  lifecycle_chain?: KsnsEvidenceLifecycleStage[];
+  missing_stages?: string[];
+  integrity?: KsnsEvidenceLifecycleIntegrity | null;
+  ownership?: KsnsEvidenceLifecycleOwnership | null;
 }
 
 export interface KsnsToolGovernanceRecord {

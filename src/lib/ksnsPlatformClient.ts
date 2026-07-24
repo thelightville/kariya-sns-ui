@@ -200,6 +200,11 @@ function summariseLifecycleStatus(status: any) {
   return parts.length > 0 ? parts.join(" / ") : null;
 }
 
+function lifecycleStageRecord(data: any, stage: string) {
+  if (!Array.isArray(data?.evidence_lifecycle)) return null;
+  return data.evidence_lifecycle.find((item: any) => item?.stage === stage)?.record ?? null;
+}
+
 function summariseCorrelation(correlation: unknown) {
   if (!correlation) return null;
   if (typeof correlation === "string") return correlation;
@@ -340,6 +345,7 @@ export const ksnsPlatformClient = {
           const firstAction = lifecycleData.actions?.[0];
           const firstVerification = lifecycleData.verifications?.[0];
           const firstResidual = lifecycleData.residual_risk_records?.[0];
+          const kaiAdvisory = lifecycleStageRecord(evidenceData, "kai_advisory");
 
           return {
             evidence_id: evidenceData?.incident_id ?? incident.incident_id,
@@ -356,10 +362,18 @@ export const ksnsPlatformClient = {
             action_record: firstAction?.action_id ?? null,
             dispatch_result: firstAction?.dispatch_result ?? firstAction?.status ?? null,
             verification_result: firstVerification?.verification_status ?? null,
-            kai_explanation: kaiData?.evidence_bundle_ref ?? evidenceData?.kai_explanation_ref ?? null,
+            kai_explanation:
+              kaiAdvisory?.advisory_summary ??
+              kaiData?.evidence_bundle_ref ??
+              evidenceData?.kai_explanation_ref ??
+              null,
             residual_risk:
               firstResidual?.closure_recommendation ?? lifecycleData.residual_risk ?? null,
             lifecycle_status: summariseLifecycleStatus(evidenceData?.lifecycle_status ?? lifecycleData.lifecycle_status),
+            lifecycle_chain: evidenceData?.evidence_lifecycle ?? [],
+            missing_stages: evidenceData?.missing_stages ?? [],
+            integrity: evidenceData?.integrity ?? null,
+            ownership: evidenceData?.ownership ?? null,
           } satisfies KsnsEvidenceRecord;
         })
       );
