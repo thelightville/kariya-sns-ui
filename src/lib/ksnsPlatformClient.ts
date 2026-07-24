@@ -25,7 +25,6 @@ import type {
 } from "@/types/ksns";
 
 const API_BASE = "/api/ksns";
-const TENANT_ID = process.env.NEXT_PUBLIC_KSNS_TENANT_ID ?? "";
 const OPERATOR_ID = process.env.NEXT_PUBLIC_KSNS_OPERATOR_ID ?? "sns-ui-alpha1";
 
 export class KsnsClientError extends Error {
@@ -87,16 +86,6 @@ async function requestWithFallback<T>(primaryPath: string, fallbackPath: string)
     }
     throw err;
   }
-}
-
-function withTenant(path: string) {
-  if (!TENANT_ID) {
-    throw new KsnsClientError(
-      "NEXT_PUBLIC_KSNS_TENANT_ID is not configured; tenant-scoped K-SNS modules are unavailable."
-    );
-  }
-  const join = path.includes("?") ? "&" : "?";
-  return `${path}${join}tenant_id=${encodeURIComponent(TENANT_ID)}`;
 }
 
 function normaliseIncident(raw: any): KsnsIncident {
@@ -238,7 +227,7 @@ export const ksnsPlatformClient = {
 
   getTrustScore: () => request<KsnsTrustScore>("/trust/score"),
 
-  getSocMetrics: () => request<KsnsSocMetrics>(withTenant("/soc/metrics")),
+  getSocMetrics: () => request<KsnsSocMetrics>("/soc/metrics"),
 
   getDecisions: () => request<KsnsDecision[]>("/decisions"),
   approveDecision: (decisionId: string) =>
@@ -278,8 +267,8 @@ export const ksnsPlatformClient = {
 
   getActions: async () => {
     const data = await requestWithFallback<KsnsAction[] | { actions?: any[]; items?: any[] }>(
-      withTenant("/lifecycle/actions"),
-      withTenant("/actions/")
+      "/lifecycle/actions",
+      "/actions/"
     );
     const items = Array.isArray(data) ? data : data.actions ?? data.items ?? [];
     return items.map(normaliseAction);
@@ -326,17 +315,13 @@ export const ksnsPlatformClient = {
   },
 
   getConnectors: async () => {
-    const data = await request<KsnsConnector[] | { connectors?: any[] }>(
-      TENANT_ID ? withTenant("/connectors/") : "/connectors"
-    );
+    const data = await request<KsnsConnector[] | { connectors?: any[] }>("/connectors");
     const items = Array.isArray(data) ? data : data.connectors ?? [];
     return items.map(normaliseConnector);
   },
 
   getToolGovernance: () =>
-    request<KsnsToolGovernanceRecord[]>(
-      TENANT_ID ? withTenant("/tool-governance") : "/tool-governance"
-    ),
+    request<KsnsToolGovernanceRecord[]>("/tool-governance"),
 
   getEvidenceRecords: async () => {
     const incidents = await ksnsPlatformClient.getIncidents();
@@ -404,7 +389,17 @@ export const ksnsPlatformClient = {
     }));
   },
 
-  getPolicies: () => request<KsnsPolicy[]>("/policies"),
+  getPolicies: async () => {
+    const data = await request<KsnsPolicy[] | { rules?: any[] }>("/policy/rules");
+    const items = Array.isArray(data) ? data : data.rules ?? [];
+    return items.map((raw) => ({
+      policy_id: raw.policy_id ?? raw.id,
+      name: raw.name,
+      description: raw.description ?? raw.rule_type ?? "K-SNS policy rule",
+      state: raw.state ?? (raw.enabled === false ? "retired" : "active"),
+      updated_at: raw.updated_at ?? raw.created_at ?? "unavailable",
+    })) satisfies KsnsPolicy[];
+  },
   requestPolicyActivation: (policyId: string) =>
     request<KsnsPolicy>(`/policies/${policyId}/request-activation`, {
       method: "POST",

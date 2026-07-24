@@ -34,9 +34,41 @@ const ALLOWED_ROUTES = [
   ["GET", /^connectors\/types$/],
   ["GET", new RegExp(`^connectors/${UUID_SEGMENT}/health$`)],
   ["GET", /^tool-governance$/],
-  ["GET", /^policies$/],
+  ["GET", /^policy\/rules$/],
   ["POST", new RegExp(`^policies/${SIMPLE_ID_SEGMENT}/request-activation$`)],
 ];
+
+export const KSNS_BFF_UI_READ_ROUTE_INVENTORY = Object.freeze([
+  "GET events",
+  "GET trust/score",
+  "GET trust/risk/{entity_type}/{entity_id}",
+  "GET trust/risk/{entity_type}/{entity_id}/history",
+  "GET trust/risk/{entity_type}/{entity_id}/contributors",
+  "GET trust/movement-summary",
+  "GET correlations/events/{event_id}",
+  "GET soc/metrics",
+  "GET decisions",
+  "GET recommendations",
+  "GET explanations",
+  "GET kai-advisory-handoffs",
+  "GET kai-advisory-handoffs/{handoff_id}",
+  "GET incidents",
+  "GET incidents/{incident_id}",
+  "GET incidents/{incident_id}/timeline",
+  "GET incidents/evidence/{ref_id}",
+  "GET actions",
+  "GET lifecycle/actions",
+  "GET lifecycle/actions/{action_id}",
+  "GET lifecycle/incidents/{incident_id}",
+  "GET lifecycle/incidents/{incident_id}/decisions",
+  "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
+  "GET lifecycle/evidence/{incident_id}",
+  "GET connectors",
+  "GET connectors/types",
+  "GET connectors/{config_id}/health",
+  "GET tool-governance",
+  "GET policy/rules",
+]);
 
 export function normalizeKsnsBffPath(pathSegments) {
   return pathSegments.filter(Boolean).join("/").replace(/^\/+|\/+$/g, "");

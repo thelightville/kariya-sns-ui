@@ -63,10 +63,11 @@ Currently used BFF routes:
 | KAI explanations | `GET /api/ksns/explanations` | `GET /explanations` | Implemented in C-009 UI API |
 | KAI advisory handoffs | `GET /api/ksns/kai-advisory-handoffs` | `GET /kai-advisory-handoffs` | Tenant-scoped K-SNS-owned advisory projection |
 | Incidents | `GET /api/ksns/incidents`, `GET /api/ksns/incidents/{id}`, `GET /api/ksns/incidents/{id}/timeline` | Incident lifecycle endpoints | Backend-driven, no fabricated records |
-| Actions | `GET /api/ksns/actions/?tenant_id=...` | `GET /actions/?tenant_id=...` | Tenant scoped; empty/unavailable state is honest |
-| Connectors | `GET /api/ksns/connectors/?tenant_id=...` | `GET /connectors/?tenant_id=...` | Tenant scoped; readiness is backend-driven |
-| SOC metrics | `GET /api/ksns/soc/metrics?tenant_id=...` | `GET /soc/metrics?tenant_id=...` | Client-ready; not required by dashboard render |
+| Actions | `GET /api/ksns/actions/` | `GET /actions/` | Tenant scope comes only from server-derived BFF context |
+| Connectors | `GET /api/ksns/connectors/` | `GET /connectors/` | Tenant scope comes only from server-derived BFF context; readiness is backend-driven |
+| SOC metrics | `GET /api/ksns/soc/metrics` | `GET /soc/metrics` | Tenant scope comes only from server-derived BFF context |
 | MCP/tool governance | `GET /api/ksns/tool-governance` | `GET /tool-governance` | Backend-driven MCP/tool misuse visibility |
+| Policies | `GET /api/ksns/policy/rules` | `GET /policy/rules` | Tenant scope comes only from server-derived BFF context |
 
 Unsupported or partially supported fields are displayed as unavailable or pending.
 ## DNS And API Treatment
@@ -96,14 +97,19 @@ See [`.env.example`](.env.example).
 |---|---|
 | `K_SNS_BASE_URL` | Server-side K-SNS API base URL used only by `/api/ksns/*`. Never expose it as `NEXT_PUBLIC_*`. |
 | `K_SNS_BFF_UPSTREAM_TIMEOUT_MS` | Server-side BFF upstream timeout. Defaults to `5000`; invalid values fail closed with `503` and stalled backend calls return `504`. |
-| `K_SNS_TENANT_ID` | Optional server-side tenant header forwarded by the BFF where needed. |
 | `KARIYA_SNS_PUBLIC_ORIGIN` | Server-only canonical auth-redirect origin. Production accepts only the exact regional `https://sns.kariya.ng` or `https://sns.kariya.ca` origin. |
 | `KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN` | Local-evidence gate only. Must remain disabled for every `sns.*` deployment. |
-| `NEXT_PUBLIC_KSNS_TENANT_ID` | Non-secret Alpha 1 tenant hint for tenant-scoped module routes. Leave blank to show unavailable state. |
 | `NEXT_PUBLIC_KSNS_OPERATOR_ID` | Non-secret operator identifier for approval/request payloads where required. |
 | `NEXT_PUBLIC_APP_DOMAIN` | Public K-SNS surface, usually `sns.kariya.ca` or `sns.kariya.ng`. |
 
 No `NEXT_PUBLIC_*` value may contain a credential, secret, or internal backend URL.
+
+The portal never sends tenant authority from `NEXT_PUBLIC_*`, cookies, query
+parameters or browser headers. `/api/ksns/*` strips caller authority inputs and
+adds only server-derived Cloud session context before calling the private K-SNS
+backend. Caller `tenant`, `tenant_id`, `X-Tenant-ID`,
+`X-Kariya-Tenant-ID`, `Forwarded` and `X-Forwarded-*` values cannot override the
+trusted context.
 ## Quick Start
 
 Requirements:

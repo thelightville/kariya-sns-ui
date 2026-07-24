@@ -17,6 +17,13 @@ import {
 const API_BASE = process.env.K_SNS_BASE_URL ?? "";
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_UPSTREAM_TIMEOUT_MS = 30_000;
+const CALLER_AUTHORITY_QUERY_PARAMS = new Set([
+  "tenant",
+  "tenant_id",
+  "x-tenant-id",
+  "x_kariya_tenant_id",
+  "x-kariya-tenant-id",
+]);
 
 type RouteContext = {
   params: Promise<{ path?: string[] }>;
@@ -45,6 +52,7 @@ function buildTargetUrl(request: NextRequest, path: string[]) {
   const suffix = path.map(encodeURIComponent).join("/");
   const target = new URL(`${base}/${suffix}`);
   new URL(request.url).searchParams.forEach((value, key) => {
+    if (CALLER_AUTHORITY_QUERY_PARAMS.has(key.toLowerCase())) return;
     target.searchParams.append(key, value);
   });
   return ["http:", "https:"].includes(target.protocol) ? target : null;

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBffHeaders } from "../src/lib/bffHeaders.mjs";
-import { isKsnsBffRequestAllowed } from "../src/lib/ksnsBffAllowlist.mjs";
+import {
+  isKsnsBffRequestAllowed,
+  KSNS_BFF_UI_READ_ROUTE_INVENTORY,
+} from "../src/lib/ksnsBffAllowlist.mjs";
+import { stripInboundAuthorityHeaders } from "../src/server/backend/bffContext.mjs";
 
 const blockedHeaders = [
   "cookie",
@@ -15,6 +18,9 @@ const blockedHeaders = [
   "transfer-encoding",
   "upgrade",
   "x-forwarded-host",
+  "forwarded",
+  "x-kariya-tenant-id",
+  "x-tenant-id",
 ];
 
 function hostileInboundHeaders() {
@@ -37,15 +43,9 @@ function hostileInboundHeaders() {
   });
 }
 
-test("BFF replaces caller authorization and tenant headers with trusted values", () => {
-  const headers = buildBffHeaders(
-    hostileInboundHeaders(),
-    "server-session",
-    "trusted-tenant"
-  );
+test("BFF strips caller authority and keeps only inert content negotiation headers", () => {
+  const headers = stripInboundAuthorityHeaders(hostileInboundHeaders());
 
-  assert.equal(headers.get("authorization"), "Bearer server-session");
-  assert.equal(headers.get("x-tenant-id"), "trusted-tenant");
   assert.equal(headers.get("accept"), "application/json");
   assert.equal(headers.get("content-type"), "application/json");
   for (const name of blockedHeaders) {
@@ -53,16 +53,19 @@ test("BFF replaces caller authorization and tenant headers with trusted values",
   }
 });
 
-test("BFF removes caller tenant context when no trusted tenant is configured", () => {
-  const headers = buildBffHeaders(hostileInboundHeaders(), "server-session");
-  assert.equal(headers.has("x-tenant-id"), false);
-});
-
-test("BFF fails closed without a server-owned session token", () => {
-  assert.throws(
-    () => buildBffHeaders(hostileInboundHeaders(), "", "trusted-tenant"),
-    /server-owned session token/
-  );
+test("BFF UI read inventory lists every read surface explicitly", () => {
+  assert.ok(KSNS_BFF_UI_READ_ROUTE_INVENTORY.length >= 28);
+  for (const entry of [
+    "GET events",
+    "GET incidents/{incident_id}/timeline",
+    "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
+    "GET connectors/types",
+    "GET tool-governance",
+    "GET kai-advisory-handoffs/{handoff_id}",
+    "GET policy/rules",
+  ]) {
+    assert.ok(KSNS_BFF_UI_READ_ROUTE_INVENTORY.includes(entry), entry);
+  }
 });
 
 test("K-SNS BFF allowlist permits UI contract routes and blocks mutation/execute surfaces", () => {
@@ -84,6 +87,7 @@ test("K-SNS BFF allowlist permits UI contract routes and blocks mutation/execute
     ["GET", ["connectors"]],
     ["GET", ["tool-governance"]],
     ["GET", ["kai-advisory-handoffs"]],
+    ["GET", ["policy", "rules"]],
     ["POST", ["decisions", "decision-1", "request-action"]],
     ["POST", ["recommendations", "recommendation-1", "approve"]],
   ];
@@ -100,6 +104,7 @@ test("K-SNS BFF allowlist permits UI contract routes and blocks mutation/execute
     ["POST", ["kai-advisory-handoffs"]],
     ["GET", ["kai", "v1", "ops", "ksns-handoff"]],
     ["POST", ["connectors"]],
+    ["GET", ["policies"]],
     ["DELETE", ["events"]],
     ["GET", ["api", "openapi.json"]],
   ];

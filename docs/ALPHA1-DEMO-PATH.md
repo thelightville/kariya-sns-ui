@@ -9,16 +9,19 @@ This path shows the merged K-SNS lifecycle without claiming production connector
 3. Start K-SNS UI with:
 
 ```bash
-K_SNS_BASE_URL=http://localhost:8000/api/v1 NEXT_PUBLIC_KSNS_TENANT_ID=<tenant-uuid> npm run dev
+K_SNS_BASE_URL=http://localhost:8000/api/v1 npm run dev
 ```
 
 On Windows PowerShell:
 
 ```powershell
 $env:K_SNS_BASE_URL="http://localhost:8000/api/v1"
-$env:NEXT_PUBLIC_KSNS_TENANT_ID="<tenant-uuid>"
 npm run dev
 ```
+
+Do not provide tenant authority through `NEXT_PUBLIC_*`, query parameters or
+browser headers. Production tenant scope is derived only from the server-side
+Cloud session context that the `/api/ksns/*` BFF sends to K-SNS.
 
 ## Lifecycle flow
 
