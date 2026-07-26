@@ -27,6 +27,7 @@ const staticDir = join(root, ".next", "static");
 const forbiddenClientMarkers = [
   "NEXT_PUBLIC_KSNS_API_URL",
   "K_SNS_BASE_URL",
+  "K_SNS_BFF_UPSTREAM_TIMEOUT_MS",
   "K_SNS_TENANT_ID",
   "KARIYA_CLOUD_AUTH_BASE_URL",
   "K_SNS_TRANSACTION_DATABASE_URL",
@@ -64,6 +65,9 @@ for (const required of [
   "buildBffContext",
   "validateBffContext",
   "stripInboundAuthorityHeaders",
+  "K_SNS_BFF_UPSTREAM_TIMEOUT_MS",
+  "AbortController",
+  "clearTimeout(timeout)",
 ]) {
   if (!route.includes(required)) failures.push(`BFF route missing ${required}`);
 }
