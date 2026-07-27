@@ -82,6 +82,7 @@ export interface KsnsIncident {
   severity: Severity;
   state: IncidentState;
   status?: IncidentState | string;
+  assigned_to?: string | null;
   affected_asset?: string | null;
   affected_user?: string | null;
   affected_device?: string | null;
