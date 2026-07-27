@@ -1,7 +1,18 @@
 const UUID_SEGMENT = "[0-9a-fA-F-]{32,36}";
 const SIMPLE_ID_SEGMENT = "[^/]+";
 
-const PRODUCTION_ALLOWED_ROUTES = [["GET", /^soc\/metrics$/]];
+const PRODUCTION_ALLOWED_ROUTES = [
+  ["GET", /^soc\/metrics$/],
+  ["GET", /^explanations$/],
+  ["GET", /^incidents$/],
+  ["GET", new RegExp(`^incidents/${UUID_SEGMENT}$`)],
+  ["GET", new RegExp(`^incidents/${UUID_SEGMENT}/timeline$`)],
+  ["GET", /^incidents\/evidence\/[^/]+$/],
+  ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}$`)],
+  ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}/history$`)],
+  ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}/kai-explanation-payload$`)],
+  ["GET", new RegExp(`^lifecycle/evidence/${UUID_SEGMENT}$`)],
+];
 
 const DEVELOPMENT_ALLOWED_ROUTES = [
   ["GET", /^events$/],
@@ -30,6 +41,7 @@ const DEVELOPMENT_ALLOWED_ROUTES = [
   ["GET", new RegExp(`^lifecycle/actions/${UUID_SEGMENT}$`)],
   ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}$`)],
   ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}/decisions$`)],
+  ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}/history$`)],
   ["GET", new RegExp(`^lifecycle/incidents/${UUID_SEGMENT}/kai-explanation-payload$`)],
   ["GET", new RegExp(`^lifecycle/evidence/${UUID_SEGMENT}$`)],
   ["GET", /^connectors\/?$/],
@@ -39,7 +51,18 @@ const DEVELOPMENT_ALLOWED_ROUTES = [
   ["GET", /^policy\/rules$/],
 ];
 
-export const KSNS_BFF_PRODUCTION_ROUTE_INVENTORY = Object.freeze(["GET soc/metrics"]);
+export const KSNS_BFF_PRODUCTION_ROUTE_INVENTORY = Object.freeze([
+  "GET soc/metrics",
+  "GET explanations",
+  "GET incidents",
+  "GET incidents/{incident_id}",
+  "GET incidents/{incident_id}/timeline",
+  "GET incidents/evidence/{ref_id}",
+  "GET lifecycle/incidents/{incident_id}",
+  "GET lifecycle/incidents/{incident_id}/history",
+  "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
+  "GET lifecycle/evidence/{incident_id}",
+]);
 
 export const KSNS_BFF_UI_READ_ROUTE_INVENTORY = Object.freeze([
   "GET events",
@@ -64,6 +87,7 @@ export const KSNS_BFF_UI_READ_ROUTE_INVENTORY = Object.freeze([
   "GET lifecycle/actions/{action_id}",
   "GET lifecycle/incidents/{incident_id}",
   "GET lifecycle/incidents/{incident_id}/decisions",
+  "GET lifecycle/incidents/{incident_id}/history",
   "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
   "GET lifecycle/evidence/{incident_id}",
   "GET connectors",
