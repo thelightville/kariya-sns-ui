@@ -108,6 +108,7 @@ function normaliseIncident(raw: any): KsnsIncident {
     severity: source.severity ?? "info",
     state: source.state ?? source.status ?? "investigating",
     status: source.status,
+    assigned_to: source.assigned_to ?? null,
     affected_asset: source.affected_asset ?? source.asset ?? null,
     affected_user: source.affected_user ?? source.user ?? null,
     affected_device: source.affected_device ?? source.device ?? null,
@@ -241,8 +242,19 @@ export const ksnsPlatformClient = {
   requestDecisionAction: (decisionId: string) =>
     request<KsnsDecision>(`/decisions/${decisionId}/request-action`, { method: "POST" }),
 
-  getIncidents: async () => {
-    const data = await request<KsnsIncident[] | { incidents?: any[] }>("/incidents");
+  getIncidents: async (params?: {
+    query?: string;
+    assignedTo?: string;
+    status?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.query) qs.set("q", params.query);
+    if (params?.assignedTo) qs.set("assigned_to", params.assignedTo);
+    if (params?.status) qs.set("status", params.status);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    const data = await request<KsnsIncident[] | { incidents?: any[] }>(
+      `/incidents${suffix}`
+    );
     const items = Array.isArray(data) ? data : data.incidents ?? [];
     return items.map(normaliseIncident);
   },
@@ -266,6 +278,10 @@ export const ksnsPlatformClient = {
   getIncidentEvidence: (refId: string) => request<any>(`/incidents/evidence/${refId}`),
   getLifecycleEvidenceBundle: (incidentId: string) =>
     request<KsnsLifecycleEvidenceBundle>(`/lifecycle/evidence/${incidentId}`),
+  getIncidentHistory: (incidentId: string) =>
+    request<{ incident_id: string; history: any[] }>(
+      `/lifecycle/incidents/${incidentId}/history`
+    ),
   getKaiExplanationPayload: (incidentId: string) =>
     request<KsnsKaiExplanationPayload>(`/lifecycle/incidents/${incidentId}/kai-explanation-payload`),
 
