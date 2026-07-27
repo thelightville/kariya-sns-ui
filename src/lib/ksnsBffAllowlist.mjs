@@ -1,7 +1,9 @@
 const UUID_SEGMENT = "[0-9a-fA-F-]{32,36}";
 const SIMPLE_ID_SEGMENT = "[^/]+";
 
-const PRODUCTION_ALLOWED_ROUTES = [["GET", /^soc\\/metrics$/]];\n\nconst DEVELOPMENT_ALLOWED_ROUTES = [
+const PRODUCTION_ALLOWED_ROUTES = [["GET", /^soc\/metrics$/]];
+
+const DEVELOPMENT_ALLOWED_ROUTES = [
   ["GET", /^events$/],
   ["POST", /^events$/],
   ["GET", /^trust\/score$/],
@@ -37,7 +39,9 @@ const PRODUCTION_ALLOWED_ROUTES = [["GET", /^soc\\/metrics$/]];\n\nconst DEVELOP
   ["GET", /^policy\/rules$/],
 ];
 
-export const KSNS_BFF_PRODUCTION_ROUTE_INVENTORY = Object.freeze(["GET soc/metrics"]);\n\nexport const KSNS_BFF_UI_READ_ROUTE_INVENTORY = Object.freeze([
+export const KSNS_BFF_PRODUCTION_ROUTE_INVENTORY = Object.freeze(["GET soc/metrics"]);
+
+export const KSNS_BFF_UI_READ_ROUTE_INVENTORY = Object.freeze([
   "GET events",
   "GET trust/score",
   "GET trust/risk/{entity_type}/{entity_id}",
@@ -73,7 +77,18 @@ export function normalizeKsnsBffPath(pathSegments) {
   return pathSegments.filter(Boolean).join("/").replace(/^\/+|\/+$/g, "");
 }
 
-export function isKsnsBffRequestAllowed(\n  method,\n  pathSegments,\n  { production = true } = {}\n) {\n  const normalizedMethod = method.toUpperCase();\n  const normalizedPath = normalizeKsnsBffPath(pathSegments);\n  const allowedRoutes = production\n    ? PRODUCTION_ALLOWED_ROUTES\n    : DEVELOPMENT_ALLOWED_ROUTES;\n  return allowedRoutes.some(\n    ([allowedMethod, pattern]) =>
+export function isKsnsBffRequestAllowed(
+  method,
+  pathSegments,
+  { production = true } = {}
+) {
+  const normalizedMethod = method.toUpperCase();
+  const normalizedPath = normalizeKsnsBffPath(pathSegments);
+  const allowedRoutes = production
+    ? PRODUCTION_ALLOWED_ROUTES
+    : DEVELOPMENT_ALLOWED_ROUTES;
+  return allowedRoutes.some(
+    ([allowedMethod, pattern]) =>
       allowedMethod === normalizedMethod && pattern.test(normalizedPath)
   );
 }
