@@ -9,13 +9,13 @@ export const CLOUD_RESPONSE_MAX_BYTES = 65_536;
 const REGIONS = Object.freeze({
   ng: Object.freeze({
     public_origin: "https://sns.kariya.ng",
-    cloud_origin: "https://console.kariya.ng",
+    cloud_origin: "https://account.kariya.ng",
     spiffe_uri: "spiffe://kariya/services/ksns/ng",
     cloud_server_name: "cloud-auth.ng.internal.kariya",
   }),
   ca: Object.freeze({
     public_origin: "https://sns.kariya.ca",
-    cloud_origin: "https://console.kariya.ca",
+    cloud_origin: "https://account.kariya.ca",
     spiffe_uri: "spiffe://kariya/services/ksns/ca",
     cloud_server_name: "cloud-auth.ca.internal.kariya",
   }),

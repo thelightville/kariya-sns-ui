@@ -23,6 +23,11 @@ Console remains the canonical unified product portal:
 - `https://console.kariya.ca`
 - `https://console.kariya.ng`
 
+Account is the production identity authority for SNS authentication:
+
+- `https://account.kariya.ca`
+- `https://account.kariya.ng`
+
 K-SNS UI can exist as a dedicated SOC/security-operations surface, but it must not replace Console as the primary product entry point. Console should deep-link into K-SNS for:
 
 - `/overview` — K-SNS dashboard

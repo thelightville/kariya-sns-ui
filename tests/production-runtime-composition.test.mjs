@@ -44,7 +44,7 @@ test("protected production config pins exact regional resources", () => {
   const ng = loadProductionAuthConfig(environment("ng"));
   assert.equal(ng.region, "ng");
   assert.equal(ng.spiffe_uri, "spiffe://kariya/services/ksns/ng");
-  assert.equal(ng.cloud_origin, "https://console.kariya.ng");
+  assert.equal(ng.cloud_origin, "https://account.kariya.ng");
   assert.equal(ng.transport_origin, "https://10.0.0.10:8443");
   assert.equal(ng.tls_server_name, "cloud-auth.ng.internal.kariya");
   assert.equal(ng.endpoints.introspect, "https://10.0.0.10:8443/cloud/auth/session/introspect");
@@ -63,12 +63,12 @@ test("protected production config pins exact regional resources", () => {
 
 test("private transport and server identity fail closed on drift", () => {
   for (const overrides of [
-    { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://console.kariya.ng" },
+    { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://account.kariya.ng" },
     { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://127.0.0.1:8443" },
     { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "http://10.0.0.10:8443" },
     { K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN: "https://10.0.0.10" },
     { K_SNS_CLOUD_MTLS_SERVER_NAME: "cloud-auth.ca.internal.kariya" },
-    { K_SNS_CLOUD_MTLS_SERVER_NAME: "console.kariya.ng" },
+    { K_SNS_CLOUD_MTLS_SERVER_NAME: "account.kariya.ng" },
   ]) {
     assert.throws(() => loadProductionAuthConfig({ ...environment("ng"), ...overrides }));
   }

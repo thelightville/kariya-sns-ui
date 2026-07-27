@@ -12,7 +12,7 @@ contracts for the founder journey to sns.kariya.ng. It preserves the paired
 - /api/auth/exchange/start creates independently random state, nonce, and PKCE
   verifier, stores only required digests plus an encrypted custody envelope,
   registers the exact regional transaction, and sends the browser only
-  request_id and raw state to the paired Console origin.
+  request_id and raw state to the paired Account origin.
 - /api/auth/exchange/callback accepts exactly code and state, atomically
   reserves the matching regional transaction, clears the custody envelope
   before redemption, validates Cloud nonce/region/audience/time, and writes a
@@ -38,8 +38,12 @@ verification.
 
 | Region | Issuer | Audience | Callback | Service URI SAN |
 |---|---|---|---|---|
-| NG | https://console.kariya.ng | https://sns.kariya.ng | https://sns.kariya.ng/api/auth/exchange/callback | spiffe://kariya/services/ksns/ng |
-| CA | https://console.kariya.ca | https://sns.kariya.ca | https://sns.kariya.ca/api/auth/exchange/callback | spiffe://kariya/services/ksns/ca |
+| NG | https://account.kariya.ng | https://sns.kariya.ng | https://sns.kariya.ng/api/auth/exchange/callback | spiffe://kariya/services/ksns/ng |
+| CA | https://account.kariya.ca | https://sns.kariya.ca | https://sns.kariya.ca/api/auth/exchange/callback | spiffe://kariya/services/ksns/ca |
+
+Console issuers are accepted only as explicit migration compatibility for
+existing sessions/transactions that still match the same region, audience,
+callback, and destination host. New K-SNS authentication starts use Account.
 
 State, nonce, verifier, request ID, authorization code, and opaque session
 handle are canonical unpadded base64url encodings of exactly 32 bytes. Cloud is
