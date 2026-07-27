@@ -15,6 +15,8 @@ import {
 } from "@/server/auth/runtimeComposition.mjs";
 
 const API_BASE = process.env.K_SNS_BASE_URL ?? "";
+const BFF_AUTH_TOKEN = process.env.K_SNS_BFF_AUTH_TOKEN ?? "";
+const BFF_WORKLOAD_ID = process.env.K_SNS_BFF_WORKLOAD_ID ?? "";
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_UPSTREAM_TIMEOUT_MS = 30_000;
 const CALLER_AUTHORITY_QUERY_PARAMS = new Set([
@@ -73,12 +75,17 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
 
   const { path = [] } = await context.params;
   const method = request.method.toUpperCase();
-  if (!isKsnsBffRequestAllowed(method, path)) {
+  const production = process.env.NODE_ENV === "production";
+  if (!isKsnsBffRequestAllowed(method, path, { production })) {
     return jsonError("K-SNS BFF route is not available.", 404);
   }
 
   const target = buildTargetUrl(request, path);
   if (!target) return jsonError("K-SNS backend is unavailable.", 503);
+  const hasPartialWorkloadIdentity = Boolean(BFF_AUTH_TOKEN) !== Boolean(BFF_WORKLOAD_ID);
+  if (hasPartialWorkloadIdentity || (production && (!BFF_AUTH_TOKEN || !BFF_WORKLOAD_ID))) {
+    return jsonError("K-SNS BFF workload identity is unavailable.", 503);
+  }
 
   const requestId = randomBytes(32).toString("base64url");
   const contextHeaders = validateBffContext(
@@ -87,6 +94,10 @@ async function proxyToKsns(request: NextRequest, context: RouteContext) {
   const headers = stripInboundAuthorityHeaders(request.headers);
   for (const [name, value] of Object.entries(contextHeaders)) {
     headers.set(name, value);
+  }
+  if (BFF_AUTH_TOKEN && BFF_WORKLOAD_ID) {
+    headers.set("authorization", `Bearer ${BFF_AUTH_TOKEN}`);
+    headers.set("x-kariya-workload-id", BFF_WORKLOAD_ID);
   }
 
   const hasBody = !["GET", "HEAD"].includes(method);
