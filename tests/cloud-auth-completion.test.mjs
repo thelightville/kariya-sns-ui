@@ -29,7 +29,7 @@ function active(region = "ng") {
   return {
     contract_version: "cloud.session-authority.v1",
     active: true,
-    issuer: ng ? "https://console.kariya.ng" : "https://console.kariya.ca",
+    issuer: ng ? "https://account.kariya.ng" : "https://account.kariya.ca",
     audience: ng ? "https://sns.kariya.ng" : "https://sns.kariya.ca",
     destination_host: ng ? "sns.kariya.ng" : "sns.kariya.ca",
     region,
@@ -71,7 +71,7 @@ function harness({ redeemThrows = false } = {}) {
       if (redeemThrows) throw new Error("lost_response");
       return {
         contract_version: "cloud.authorization-code-redemption.v1",
-        issuer: "https://console.kariya.ng",
+        issuer: "https://account.kariya.ng",
         audience: "https://sns.kariya.ng",
         region: "ng",
         nonce: NONCE,
@@ -116,7 +116,7 @@ test("synthetic start and callback preserve exact regional contract and bounded 
     normalized_return_path: "/workflow",
   });
   const url = new URL(started.authorization_url);
-  assert.equal(url.origin, "https://console.kariya.ng");
+  assert.equal(url.origin, "https://account.kariya.ng");
   assert.equal(url.pathname, "/api/auth/exchange/authorize");
   assert.deepEqual([...url.searchParams.keys()].sort(), ["request_id", "state"]);
   assert.equal(value.registerRequest.state_sha256.length, 43);

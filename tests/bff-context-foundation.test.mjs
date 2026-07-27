@@ -16,7 +16,7 @@ function introspection(role = "analyst") {
   return {
     contract_version: "cloud.session-authority.v1",
     active: true,
-    issuer: "https://console.kariya.ng",
+    issuer: "https://account.kariya.ng",
     audience: "https://sns.kariya.ng",
     destination_host: "sns.kariya.ng",
     region: "ng",
@@ -64,7 +64,7 @@ test("inactive, cross-country, malformed, missing and extra context fail closed"
   assert.throws(
     () =>
       buildBffContext(
-        { ...introspection(), issuer: "https://console.kariya.ca" },
+        { ...introspection(), issuer: "https://account.kariya.ca" },
         "ng",
         REQUEST_ID
       ),
@@ -73,7 +73,7 @@ test("inactive, cross-country, malformed, missing and extra context fail closed"
 
   const ca = {
     ...introspection(),
-    issuer: "https://console.kariya.ca",
+    issuer: "https://account.kariya.ca",
     audience: "https://sns.kariya.ca",
     destination_host: "sns.kariya.ca",
     region: "ca",

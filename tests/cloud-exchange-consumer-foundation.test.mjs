@@ -61,21 +61,23 @@ function activeIntrospection(region = "ng") {
 test("regional tuples are exact and country-paired", () => {
   assert.deepEqual(regionalTuple("ng"), {
     region: "ng",
-    issuer: "https://console.kariya.ng",
+    issuer: "https://account.kariya.ng",
     audience: "https://sns.kariya.ng",
     destination_host: "sns.kariya.ng",
     redirect_uri: "https://sns.kariya.ng/api/auth/exchange/callback",
     client_id: "ksns-ui-ng",
     client_uri_san: "spiffe://kariya/services/ksns/ng",
+    compatibility_issuers: ["https://console.kariya.ng"],
   });
   assert.deepEqual(regionalTuple("ca"), {
     region: "ca",
-    issuer: "https://console.kariya.ca",
+    issuer: "https://account.kariya.ca",
     audience: "https://sns.kariya.ca",
     destination_host: "sns.kariya.ca",
     redirect_uri: "https://sns.kariya.ca/api/auth/exchange/callback",
     client_id: "ksns-ui-ca",
     client_uri_san: "spiffe://kariya/services/ksns/ca",
+    compatibility_issuers: ["https://console.kariya.ca"],
   });
   assert.throws(() => regionalTuple("us"), /exactly ng or ca/);
 });
@@ -131,7 +133,7 @@ test("redemption accepts delayed observation and rejects crossover or time drift
   assert.throws(
     () =>
       validateRedemptionResult(
-        { ...redemption(), issuer: "https://console.kariya.ca" },
+        { ...redemption(), issuer: "https://account.kariya.ca" },
         "ng",
         NONCE
       ),
@@ -155,6 +157,13 @@ test("redemption accepts delayed observation and rejects crossover or time drift
   }
 
   assert.equal(validateIntrospectionResult(activeIntrospection(), "ng").active, true);
+  assert.equal(
+    validateIntrospectionResult(
+      { ...activeIntrospection(), issuer: "https://console.kariya.ng" },
+      "ng"
+    ).issuer,
+    "https://console.kariya.ng"
+  );
   assert.throws(
     () =>
       validateIntrospectionResult(

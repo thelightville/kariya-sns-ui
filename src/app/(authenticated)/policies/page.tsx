@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { FileCog } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import ApprovalAction from "@/components/ApprovalAction";
 import { useKsnsQuery } from "@/lib/useKsnsQuery";
 import { ksnsPlatformClient } from "@/lib/ksnsPlatformClient";
 import type { PolicyState } from "@/types/ksns";
@@ -17,7 +15,6 @@ const STATE_BADGE: Record<PolicyState, string> = {
 
 export default function PoliciesPage() {
   const policies = useKsnsQuery(() => ksnsPlatformClient.getPolicies());
-  const [overrides, setOverrides] = useState<Record<string, PolicyState>>({});
 
   if (policies.status === "loading") {
     return <p className="text-xs text-gray-500">Loading policies…</p>;
@@ -46,7 +43,7 @@ export default function PoliciesPage() {
   return (
     <div className="card divide-y divide-navy-700/40">
       {policies.data.map((p) => {
-        const state = overrides[p.policy_id] ?? p.state;
+        const state: PolicyState = p.state;
         return (
           <div key={p.policy_id} className="flex items-center justify-between p-4">
             <div>
@@ -59,14 +56,10 @@ export default function PoliciesPage() {
               <p className="mt-1 text-xs text-gray-500">{p.description}</p>
             </div>
             {(state === "draft" || state === "awaiting_approval") && (
-              <ApprovalAction
-                intent="request"
-                label="Request Activation"
-                onAction={async () => {
-                  await ksnsPlatformClient.requestPolicyActivation(p.policy_id);
-                  setOverrides((s) => ({ ...s, [p.policy_id]: "awaiting_approval" }));
-                }}
-              />
+              <p className="max-w-xs text-right text-xs text-amber-200">
+                Activation requires backend-owned approval evidence and is not available from
+                the browser.
+              </p>
             )}
           </div>
         );

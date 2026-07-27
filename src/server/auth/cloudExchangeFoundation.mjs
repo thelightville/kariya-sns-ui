@@ -7,21 +7,23 @@ export const PREAUTHORIZATION_TTL_SECONDS = 300;
 export const REGIONAL_TUPLES = Object.freeze({
   ng: Object.freeze({
     region: "ng",
-    issuer: "https://console.kariya.ng",
+    issuer: "https://account.kariya.ng",
     audience: "https://sns.kariya.ng",
     destination_host: "sns.kariya.ng",
     redirect_uri: "https://sns.kariya.ng/api/auth/exchange/callback",
     client_id: "ksns-ui-ng",
     client_uri_san: "spiffe://kariya/services/ksns/ng",
+    compatibility_issuers: Object.freeze(["https://console.kariya.ng"]),
   }),
   ca: Object.freeze({
     region: "ca",
-    issuer: "https://console.kariya.ca",
+    issuer: "https://account.kariya.ca",
     audience: "https://sns.kariya.ca",
     destination_host: "sns.kariya.ca",
     redirect_uri: "https://sns.kariya.ca/api/auth/exchange/callback",
     client_id: "ksns-ui-ca",
     client_uri_san: "spiffe://kariya/services/ksns/ca",
+    compatibility_issuers: Object.freeze(["https://console.kariya.ca"]),
   }),
 });
 
@@ -85,6 +87,11 @@ export function regionalTuple(region) {
   const tuple = REGIONAL_TUPLES[region];
   if (!tuple) fail("region must be exactly ng or ca");
   return tuple;
+}
+
+export function acceptedIdentityIssuer(region, issuer) {
+  const tuple = regionalTuple(region);
+  return tuple.issuer === issuer || tuple.compatibility_issuers.includes(issuer);
 }
 
 export function canonical32(value, label = "value") {
@@ -159,7 +166,7 @@ export function validateRedemptionResult(value, expectedRegion, expectedNonce) {
   const tuple = regionalTuple(expectedRegion);
   if (
     value.region !== tuple.region ||
-    value.issuer !== tuple.issuer ||
+    !acceptedIdentityIssuer(expectedRegion, value.issuer) ||
     value.audience !== tuple.audience
   ) {
     fail("redemption result crosses the configured regional tuple");
@@ -218,7 +225,7 @@ export function validateIntrospectionResult(value, expectedRegion) {
   const tuple = regionalTuple(expectedRegion);
   if (
     value.region !== tuple.region ||
-    value.issuer !== tuple.issuer ||
+    !acceptedIdentityIssuer(expectedRegion, value.issuer) ||
     value.audience !== tuple.audience ||
     value.destination_host !== tuple.destination_host
   ) {
