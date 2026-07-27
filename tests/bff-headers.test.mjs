@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isKsnsBffRequestAllowed,
+  KSNS_BFF_PRODUCTION_ROUTE_INVENTORY,
   KSNS_BFF_UI_READ_ROUTE_INVENTORY,
 } from "../src/lib/ksnsBffAllowlist.mjs";
 import { stripInboundAuthorityHeaders } from "../src/server/backend/bffContext.mjs";
@@ -53,6 +54,19 @@ test("BFF strips caller authority and keeps only inert content negotiation heade
   }
 });
 
+test("production BFF inventory exposes only hardened tenant-scoped reads", () => {
+  assert.deepEqual(KSNS_BFF_PRODUCTION_ROUTE_INVENTORY, ["GET soc/metrics"]);
+  assert.equal(isKsnsBffRequestAllowed("GET", ["soc", "metrics"]), true);
+  for (const [method, path] of [
+    ["GET", ["incidents"]],
+    ["GET", ["events"]],
+    ["POST", ["events"]],
+    ["POST", ["actions", "action-1", "approve"]],
+  ]) {
+    assert.equal(isKsnsBffRequestAllowed(method, path), false);
+  }
+});
+
 test("BFF UI read inventory lists every read surface explicitly", () => {
   assert.ok(KSNS_BFF_UI_READ_ROUTE_INVENTORY.length >= 28);
   for (const entry of [
@@ -93,7 +107,11 @@ test("K-SNS BFF allowlist permits UI contract routes and blocks mutation/execute
   ];
 
   for (const [method, path] of allowed) {
-    assert.equal(isKsnsBffRequestAllowed(method, path), true, `${method} ${path.join("/")}`);
+    assert.equal(
+      isKsnsBffRequestAllowed(method, path, { production: false }),
+      true,
+      `${method} ${path.join("/")}`
+    );
   }
 
   const blocked = [
