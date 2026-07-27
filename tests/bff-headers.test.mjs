@@ -54,14 +54,41 @@ test("BFF strips caller authority and keeps only inert content negotiation heade
   }
 });
 
-test("production BFF inventory exposes only hardened tenant-scoped reads", () => {
-  assert.deepEqual(KSNS_BFF_PRODUCTION_ROUTE_INVENTORY, ["GET soc/metrics"]);
-  assert.equal(isKsnsBffRequestAllowed("GET", ["soc", "metrics"]), true);
+test("production BFF exposes the tenant-scoped incident read contract only", () => {
+  assert.deepEqual(KSNS_BFF_PRODUCTION_ROUTE_INVENTORY, [
+    "GET soc/metrics",
+    "GET explanations",
+    "GET incidents",
+    "GET incidents/{incident_id}",
+    "GET incidents/{incident_id}/timeline",
+    "GET incidents/evidence/{ref_id}",
+    "GET lifecycle/incidents/{incident_id}",
+    "GET lifecycle/incidents/{incident_id}/history",
+    "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
+    "GET lifecycle/evidence/{incident_id}",
+  ]);
+  const incidentId = "00000000-0000-4000-8000-000000000001";
+  for (const path of [
+    ["soc", "metrics"],
+    ["explanations"],
+    ["incidents"],
+    ["incidents", incidentId],
+    ["incidents", incidentId, "timeline"],
+    ["incidents", "evidence", "event-1"],
+    ["lifecycle", "incidents", incidentId],
+    ["lifecycle", "incidents", incidentId, "history"],
+    ["lifecycle", "incidents", incidentId, "kai-explanation-payload"],
+    ["lifecycle", "evidence", incidentId],
+  ]) {
+    assert.equal(isKsnsBffRequestAllowed("GET", path), true, path.join("/"));
+  }
   for (const [method, path] of [
-    ["GET", ["incidents"]],
     ["GET", ["events"]],
     ["POST", ["events"]],
+    ["PATCH", ["incidents", incidentId, "assignment"]],
+    ["PATCH", ["incidents", incidentId, "status"]],
     ["POST", ["actions", "action-1", "approve"]],
+    ["GET", ["incidents", "not-a-uuid"]],
   ]) {
     assert.equal(isKsnsBffRequestAllowed(method, path), false);
   }
@@ -72,6 +99,7 @@ test("BFF UI read inventory lists every read surface explicitly", () => {
   for (const entry of [
     "GET events",
     "GET incidents/{incident_id}/timeline",
+    "GET lifecycle/incidents/{incident_id}/history",
     "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
     "GET connectors/types",
     "GET tool-governance",
