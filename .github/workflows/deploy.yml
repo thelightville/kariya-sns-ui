@@ -171,6 +171,10 @@ jobs:
           chown -R root:root "$RELEASE_DIR"
           find "$RELEASE_DIR" -type d -exec chmod 0755 {} +
           find "$RELEASE_DIR" -type f -exec chmod 0644 {} +
+          ln -sfn ../../static "$RELEASE_DIR/.next/standalone/.next/static"
+          if test -d "$RELEASE_DIR/public"; then
+            ln -sfn ../../public "$RELEASE_DIR/.next/standalone/public"
+          fi
           ln -sfn "$RELEASE_DIR" "$SERVICE_PATH/current.next"
           mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
           systemctl restart "$SYSTEMD_UNIT"
