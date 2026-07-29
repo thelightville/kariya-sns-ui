@@ -10,6 +10,7 @@ import {
 } from "@/server/auth/runtimeComposition.mjs";
 
 const PUBLIC_PATHS = ["/login"];
+const HEALTH_PATH = "/api/health";
 const CONFIGURED_ORIGIN = process.env.KARIYA_SNS_PUBLIC_ORIGIN;
 const ALLOW_LOOPBACK_ORIGIN =
   process.env.KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN === "1";
@@ -64,6 +65,7 @@ async function authorizeRequest(request: NextRequest) {
 }
 
 export function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === HEALTH_PATH) return NextResponse.next();
   return authorizeRequest(request);
 }
 
