@@ -171,16 +171,16 @@ jobs:
           PORT="$PORT" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"
           REMOTE_DEPLOY
           then
-            "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
-            set -euo pipefail
-            previous_release=$(cat "$ROLLBACK_FILE")
-            test -n "$previous_release"
-            test -d "$previous_release"
-            ln -sfn "$previous_release" "$SERVICE_PATH/current.next"
-            mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
-            systemctl restart "$SYSTEMD_UNIT"
-            test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
-            REMOTE_ROLLBACK
+          "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
+          set -euo pipefail
+          previous_release=$(cat "$ROLLBACK_FILE")
+          test -n "$previous_release"
+          test -d "$previous_release"
+          ln -sfn "$previous_release" "$SERVICE_PATH/current.next"
+          mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
+          systemctl restart "$SYSTEMD_UNIT"
+          test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
+          REMOTE_ROLLBACK
             echo "Immutable K-SNS deploy failed; prior systemd release restored."
             exit 1
           fi
@@ -193,16 +193,16 @@ jobs:
           PORT="$PORT" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"
           REMOTE_VERIFY
           then
-            "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
-            set -euo pipefail
-            previous_release=$(cat "$ROLLBACK_FILE")
-            test -n "$previous_release"
-            test -d "$previous_release"
-            ln -sfn "$previous_release" "$SERVICE_PATH/current.next"
-            mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
-            systemctl restart "$SYSTEMD_UNIT"
-            test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
-            REMOTE_ROLLBACK
+          "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
+          set -euo pipefail
+          previous_release=$(cat "$ROLLBACK_FILE")
+          test -n "$previous_release"
+          test -d "$previous_release"
+          ln -sfn "$previous_release" "$SERVICE_PATH/current.next"
+          mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
+          systemctl restart "$SYSTEMD_UNIT"
+          test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
+          REMOTE_ROLLBACK
             echo "Immutable K-SNS health failed; prior systemd release restored."
             exit 1
           fi
