@@ -17,7 +17,7 @@ const ALLOW_LOOPBACK_ORIGIN =
   process.env.KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN === "1";
 
 function requestApprovedOrigin(request: NextRequest) {
-  const origin = request.nextUrl.origin;
+  const origin = `https://${request.nextUrl.hostname}`;
   if (APPROVED_SNS_ORIGINS.includes(origin)) return origin;
   return CONFIGURED_ORIGIN;
 }

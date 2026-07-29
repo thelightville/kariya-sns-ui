@@ -87,6 +87,7 @@ test("Proxy never derives redirect origins from request metadata", () => {
   assert.doesNotMatch(proxySource, /export function middleware\(/);
   assert.match(proxySource, /process\.env\.KARIYA_SNS_PUBLIC_ORIGIN/);
   assert.match(proxySource, /APPROVED_SNS_ORIGINS\.includes\(origin\)/);
+  assert.match(proxySource, /request\.nextUrl\.hostname/);
   assert.match(proxySource, /loginRedirectLocation\(pathname, origin/);
   assert.doesNotMatch(proxySource, /new URL\(|request\.url/);
   assert.doesNotMatch(
