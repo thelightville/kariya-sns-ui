@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  APPROVED_SNS_ORIGINS,
   authenticatedHomeLocation,
   loginRedirectLocation,
 } from "@/lib/authRedirects.mjs";
@@ -17,8 +16,9 @@ const ALLOW_LOOPBACK_ORIGIN =
   process.env.KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN === "1";
 
 function requestApprovedOrigin(request: NextRequest) {
-  const origin = `https://${request.nextUrl.hostname}`;
-  if (APPROVED_SNS_ORIGINS.includes(origin)) return origin;
+  const host = request.headers.get("host")?.toLowerCase();
+  if (host === "sns.kariya.ng") return "https://sns.kariya.ng";
+  if (host === "sns.kariya.ca") return "https://sns.kariya.ca";
   return CONFIGURED_ORIGIN;
 }
 
