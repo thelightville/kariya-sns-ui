@@ -149,6 +149,19 @@ jobs:
           if ! "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' RELEASE_DIR='$RELEASE_DIR' ROLLBACK_FILE='$ROLLBACK_FILE' SHA='$SHA' SYSTEMD_UNIT='$SYSTEMD_UNIT' REMOTE_ENV_PATH='$REMOTE_ENV_PATH' bash -s" <<'REMOTE_DEPLOY'
           set -euo pipefail
 
+          health_check() {
+            local port
+            port=$(sed -n 's/^PORT=//p' "$REMOTE_ENV_PATH" | tail -n 1)
+            case "$port" in ''|*[!0-9]*) port=3010 ;; esac
+            for _ in $(seq 1 20); do
+              if PORT="$port" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+
           test -f "$RELEASE_DIR/.next/standalone/server.js"
           printf '%s\n' "$SHA" > "$RELEASE_DIR/REVISION"
           chmod 0644 "$RELEASE_DIR/REVISION"
@@ -167,9 +180,7 @@ jobs:
           app_user=$(systemctl show "$SYSTEMD_UNIT" --property=User --value)
           test -n "$app_user"
           test "$app_user" != root
-          PORT=$(sed -n 's/^PORT=//p' "$REMOTE_ENV_PATH" | tail -n 1)
-          case "$PORT" in ''|*[!0-9]*) PORT=3010 ;; esac
-          PORT="$PORT" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"
+          health_check
           REMOTE_DEPLOY
           then
           "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
@@ -188,10 +199,20 @@ jobs:
 
           if ! "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' REMOTE_ENV_PATH='$REMOTE_ENV_PATH' bash -s" <<'REMOTE_VERIFY'
           set -euo pipefail
+          health_check() {
+            local port
+            port=$(sed -n 's/^PORT=//p' "$REMOTE_ENV_PATH" | tail -n 1)
+            case "$port" in ''|*[!0-9]*) port=3010 ;; esac
+            for _ in $(seq 1 20); do
+              if PORT="$port" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
           test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
-          PORT=$(sed -n 's/^PORT=//p' "$REMOTE_ENV_PATH" | tail -n 1)
-          case "$PORT" in ''|*[!0-9]*) PORT=3010 ;; esac
-          PORT="$PORT" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"
+          health_check
           REMOTE_VERIFY
           then
           "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
