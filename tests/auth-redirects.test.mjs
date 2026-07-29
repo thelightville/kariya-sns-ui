@@ -95,6 +95,8 @@ test("Proxy never derives redirect origins from request metadata", () => {
 });
 
 test("Proxy matcher preserves protected-route and BFF exclusions", () => {
+  assert.match(proxySource, /pathname === HEALTH_PATH/);
+
   for (const url of [
     "/",
     "/login",
