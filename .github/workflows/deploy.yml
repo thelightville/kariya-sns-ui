@@ -144,7 +144,7 @@ jobs:
           RELEASE_DIR="$SERVICE_PATH/.release-staging/$SHA"
           ROLLBACK_FILE="$SERVICE_PATH/.release-state/sns-$SHA.rollback"
 
-          "${SSH[@]}" "$REMOTE" "set -eu; umask 077; mkdir -p '$RELEASE_DIR' '$SERVICE_PATH/.release-state'"
+          "${SSH[@]}" "$REMOTE" "set -eu; umask 077; mkdir -p '$RELEASE_DIR' '$SERVICE_PATH/.release-state'; chmod 0755 '$SERVICE_PATH/.release-staging'"
           rsync -az --delete --exclude='.git' --exclude='.env*' --exclude='node_modules' -e "ssh -i $DEPLOY_KEY_PATH -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_PATH" ./ "$REMOTE:$RELEASE_DIR/"
           if ! "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' RELEASE_DIR='$RELEASE_DIR' ROLLBACK_FILE='$ROLLBACK_FILE' SHA='$SHA' SYSTEMD_UNIT='$SYSTEMD_UNIT' REMOTE_ENV_PATH='$REMOTE_ENV_PATH' bash -s" <<'REMOTE_DEPLOY'
           set -euo pipefail
