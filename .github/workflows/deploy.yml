@@ -155,8 +155,9 @@ jobs:
           previous_release=$(readlink -f "$SERVICE_PATH/current" 2>/dev/null || true)
           printf '%s\n' "$previous_release" > "$ROLLBACK_FILE"
           chmod 600 "$ROLLBACK_FILE"
-          find "$RELEASE_DIR" -type d -exec chmod go-w {} +
-          find "$RELEASE_DIR" -type f -exec chmod go-w {} +
+          chown -R root:root "$RELEASE_DIR"
+          find "$RELEASE_DIR" -type d -exec chmod 0755 {} +
+          find "$RELEASE_DIR" -type f -exec chmod 0644 {} +
           ln -sfn "$RELEASE_DIR" "$SERVICE_PATH/current.next"
           mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
           systemctl restart "$SYSTEMD_UNIT"
