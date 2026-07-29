@@ -38,6 +38,7 @@ const runtime = read("server", "auth", "runtimeComposition.mjs");
 const productionConfig = read("server", "auth", "productionConfig.mjs");
 const cloudClient = read("server", "auth", "cloudMtlsClient.mjs");
 const custody = read("server", "auth", "regionalEnvelopeKeyProvider.mjs");
+const syntheticReview = read("server", "auth", "syntheticReviewRuntime.mjs");
 
 for (const [label, text] of [["login", loginRoute], ["mfa", mfaRoute]]) {
   for (const forbidden of [
@@ -124,6 +125,31 @@ for (const required of [
 if (/process\.env|console\.|\.export\s*\(/u.test(custody)) {
   failures.push("custody provider must not read key environment values, log, or export keys");
 }
+for (const required of [
+  'NODE_ENV !== "development"',
+  'K_SNS_AUTH_RUNTIME === "production"',
+  'K_SNS_SYNTHETIC_REVIEW !== SYNTHETIC_REVIEW_MODE',
+  'KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN !== "1"',
+  'parsed.hostname === "127.0.0.1"',
+  'parsed.port !== ""',
+]) {
+  if (!syntheticReview.includes(required)) {
+    failures.push(`synthetic review gate missing ${required}`);
+  }
+}
+for (const forbidden of [
+  "request.headers",
+  "x-forwarded-host",
+  "forwarded",
+  "NEXT_PUBLIC",
+  "https://sns.kariya.ng",
+  "https://sns.kariya.ca",
+]) {
+  if (syntheticReview.toLowerCase().includes(forbidden.toLowerCase())) {
+    failures.push(`synthetic review runtime must not trust or target ${forbidden}`);
+  }
+}
+
 if (packageManifest.includes("@google-cloud/kms")) {
   failures.push("rejected GCP KMS dependency remains");
 }
