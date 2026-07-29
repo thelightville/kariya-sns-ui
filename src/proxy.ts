@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  APPROVED_SNS_ORIGINS,
   authenticatedHomeLocation,
   loginRedirectLocation,
 } from "@/lib/authRedirects.mjs";
@@ -15,6 +16,12 @@ const CONFIGURED_ORIGIN = process.env.KARIYA_SNS_PUBLIC_ORIGIN;
 const ALLOW_LOOPBACK_ORIGIN =
   process.env.KARIYA_SNS_ALLOW_LOOPBACK_ORIGIN === "1";
 
+function requestApprovedOrigin(request: NextRequest) {
+  const origin = request.nextUrl.origin;
+  if (APPROVED_SNS_ORIGINS.includes(origin)) return origin;
+  return CONFIGURED_ORIGIN;
+}
+
 function trustedRedirect(location: string | null) {
   if (!location) {
     return new NextResponse("K-SNS authentication redirect is unavailable.", {
@@ -24,9 +31,9 @@ function trustedRedirect(location: string | null) {
   return NextResponse.redirect(location, 307);
 }
 
-function loginRedirect(pathname: string) {
+function loginRedirect(pathname: string, origin: string | undefined) {
   return trustedRedirect(
-    loginRedirectLocation(pathname, CONFIGURED_ORIGIN, {
+    loginRedirectLocation(pathname, origin, {
       allowLoopback: ALLOW_LOOPBACK_ORIGIN,
     })
   );
@@ -45,17 +52,18 @@ async function activeSession(token: string | undefined) {
 
 async function authorizeRequest(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const redirectOrigin = requestApprovedOrigin(request);
   const isPublic = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   const isActive = await activeSession(token);
 
-  if (!isPublic && !isActive) return loginRedirect(pathname);
+  if (!isPublic && !isActive) return loginRedirect(pathname, redirectOrigin);
 
   if (isPublic && isActive) {
     return trustedRedirect(
-      authenticatedHomeLocation(CONFIGURED_ORIGIN, {
+      authenticatedHomeLocation(redirectOrigin, {
         allowLoopback: ALLOW_LOOPBACK_ORIGIN,
       })
     );
