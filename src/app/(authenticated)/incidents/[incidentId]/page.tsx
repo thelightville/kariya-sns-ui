@@ -19,6 +19,7 @@ export default function IncidentDetailPage() {
   const incidentId = params.incidentId;
   const incident = useKsnsQuery(() => ksnsPlatformClient.getIncident(incidentId), [incidentId]);
   const timeline = useKsnsQuery(() => ksnsPlatformClient.getIncidentTimeline(incidentId), [incidentId]);
+  const history = useKsnsQuery(() => ksnsPlatformClient.getIncidentHistory(incidentId), [incidentId]);
   const explanations = useKsnsQuery(() => ksnsPlatformClient.getExplanations(incidentId), [incidentId]);
   const evidenceBundle = useKsnsQuery(() => ksnsPlatformClient.getLifecycleEvidenceBundle(incidentId), [incidentId]);
   const kaiPayload = useKsnsQuery(() => ksnsPlatformClient.getKaiExplanationPayload(incidentId), [incidentId]);
@@ -82,6 +83,7 @@ export default function IncidentDetailPage() {
             <h3 className="text-xs font-semibold uppercase tracking-wide">Decision, Action, Verification</h3>
           </div>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div><dt className="text-gray-500">Assignee</dt><dd className="mt-1 text-white">{i.assigned_to ?? "Unassigned"}</dd></div>
             <div><dt className="text-gray-500">Trust/risk changes</dt><dd className="mt-1 text-white">{(i.trust_risk_changes ?? []).join(", ") || "Unavailable"}</dd></div>
             <div><dt className="text-gray-500">Decision state</dt><dd className="mt-1 text-white">{value(i.decision_state)}</dd></div>
             <div><dt className="text-gray-500">Action record</dt><dd className="mt-1 text-white">{value(i.action_record ?? i.action_status)}</dd></div>
@@ -150,6 +152,44 @@ export default function IncidentDetailPage() {
                 <p className="font-medium text-white">{entry.title ?? entry.event_type ?? entry.type ?? "Timeline entry"}</p>
                 <p className="mt-1 text-xs text-gray-500">{entry.occurred_at ?? entry.created_at ?? entry.timestamp ?? "Timestamp unavailable"}</p>
                 {entry.description && <p className="mt-1 text-xs text-gray-400">{entry.description}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          Immutable audit history
+        </h4>
+        {history.status === "loading" && (
+          <p className="mt-3 text-xs text-gray-500">Loading audit history...</p>
+        )}
+        {history.status === "error" && (
+          <div className="mt-3">
+            <EmptyState icon={FileSearch} title="Audit history unavailable" description={history.error} />
+          </div>
+        )}
+        {history.status === "success" && history.data.history.length === 0 && (
+          <div className="mt-3">
+            <EmptyState
+              icon={FileSearch}
+              title="No audit history entries"
+              description="The immutable lifecycle history endpoint returned no entries."
+            />
+          </div>
+        )}
+        {history.status === "success" && history.data.history.length > 0 && (
+          <ul className="mt-3 divide-y divide-navy-700/40 text-sm text-gray-300">
+            {history.data.history.map((entry: any) => (
+              <li key={entry.history_id} className="py-3">
+                <p className="font-medium text-white">
+                  {String(entry.event_type).replace(/_/g, " ")}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {entry.state_from ?? "none"} → {entry.state_to ?? "none"} · {entry.created_at}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Source {entry.source_product} · actor {entry.actor_id ?? "system"}
+                </p>
               </li>
             ))}
           </ul>

@@ -21,6 +21,9 @@ const blockedHeaders = [
   "x-forwarded-host",
   "forwarded",
   "x-kariya-tenant-id",
+  "x-kariya-subject-id",
+  "x-kariya-request-id",
+  "x-kariya-role",
   "x-tenant-id",
 ];
 
@@ -41,6 +44,9 @@ function hostileInboundHeaders() {
     upgrade: "websocket",
     "x-forwarded-host": "evil.example",
     "x-tenant-id": "caller-tenant",
+    "x-kariya-subject-id": "caller-subject",
+    "x-kariya-request-id": "caller-request",
+    "x-kariya-role": "admin",
   });
 }
 
@@ -54,24 +60,75 @@ test("BFF strips caller authority and keeps only inert content negotiation heade
   }
 });
 
-test("production BFF inventory exposes only hardened tenant-scoped reads", () => {
-  assert.deepEqual(KSNS_BFF_PRODUCTION_ROUTE_INVENTORY, ["GET soc/metrics"]);
-  assert.equal(isKsnsBffRequestAllowed("GET", ["soc", "metrics"]), true);
+test("production BFF exposes the tenant-scoped incident read contract only", () => {
+  assert.deepEqual(KSNS_BFF_PRODUCTION_ROUTE_INVENTORY, [
+    "GET soc/metrics",
+    "GET explanations",
+    "GET incidents",
+    "GET incidents/{incident_id}",
+    "GET incidents/{incident_id}/timeline",
+    "GET incidents/evidence/{ref_id}",
+    "GET lifecycle/incidents/{incident_id}",
+    "GET lifecycle/incidents/{incident_id}/history",
+    "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
+    "GET lifecycle/evidence/{incident_id}",
+  ]);
+  assert.deepEqual(
+    KSNS_BFF_PRODUCTION_ROUTE_INVENTORY.map((entry) =>
+      entry.replace("GET ", "GET /api/v1/")
+    ),
+    KSNS_BACKEND_PRODUCTION_READ_INVENTORY
+  );
+  const incidentId = "00000000-0000-4000-8000-000000000001";
+  const materializedProductionPaths = [
+    ["soc", "metrics"],
+    ["explanations"],
+    ["incidents"],
+    ["incidents", incidentId],
+    ["incidents", incidentId, "timeline"],
+    ["incidents", "evidence", "event-1"],
+    ["lifecycle", "incidents", incidentId],
+    ["lifecycle", "incidents", incidentId, "history"],
+    ["lifecycle", "incidents", incidentId, "kai-explanation-payload"],
+    ["lifecycle", "evidence", incidentId],
+  ];
+  for (const path of materializedProductionPaths) {
+    assert.equal(isKsnsBffRequestAllowed("GET", path), true, path.join("/"));
+  }
+  assert.equal(materializedProductionPaths.length, KSNS_BFF_PRODUCTION_ROUTE_INVENTORY.length);
   for (const [method, path] of [
-    ["GET", ["incidents"]],
     ["GET", ["events"]],
     ["POST", ["events"]],
+    ["PATCH", ["incidents", incidentId, "assignment"]],
+    ["PATCH", ["incidents", incidentId, "status"]],
     ["POST", ["actions", "action-1", "approve"]],
+    ["POST", ["lifecycle", "verifications"]],
+    ["POST", ["lifecycle", "residual-risk"]],
+    ["GET", ["incidents", "not-a-uuid"]],
   ]) {
     assert.equal(isKsnsBffRequestAllowed(method, path), false);
   }
 });
+
+const KSNS_BACKEND_PRODUCTION_READ_INVENTORY = Object.freeze([
+  "GET /api/v1/soc/metrics",
+  "GET /api/v1/explanations",
+  "GET /api/v1/incidents",
+  "GET /api/v1/incidents/{incident_id}",
+  "GET /api/v1/incidents/{incident_id}/timeline",
+  "GET /api/v1/incidents/evidence/{ref_id}",
+  "GET /api/v1/lifecycle/incidents/{incident_id}",
+  "GET /api/v1/lifecycle/incidents/{incident_id}/history",
+  "GET /api/v1/lifecycle/incidents/{incident_id}/kai-explanation-payload",
+  "GET /api/v1/lifecycle/evidence/{incident_id}",
+]);
 
 test("BFF UI read inventory lists every read surface explicitly", () => {
   assert.ok(KSNS_BFF_UI_READ_ROUTE_INVENTORY.length >= 28);
   for (const entry of [
     "GET events",
     "GET incidents/{incident_id}/timeline",
+    "GET lifecycle/incidents/{incident_id}/history",
     "GET lifecycle/incidents/{incident_id}/kai-explanation-payload",
     "GET connectors/types",
     "GET tool-governance",
