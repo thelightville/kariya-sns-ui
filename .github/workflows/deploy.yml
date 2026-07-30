@@ -71,6 +71,12 @@ jobs:
           ref: "${{ inputs.release_sha }}"
           persist-credentials: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
+          cache: npm
+
       - name: Build exact K-SNS artifact
         shell: bash
         run: |
@@ -90,9 +96,45 @@ jobs:
           set -euo pipefail
           SSH=(ssh -i "$DEPLOY_KEY_PATH" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS_PATH")
           REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
-          "${SSH[@]}" "$REMOTE" "set -eu; test -f '$REMOTE_ENV_PATH'; test ! -L '$REMOTE_ENV_PATH'; test \"\$(stat -c '%a' '$REMOTE_ENV_PATH')\" = 600; for key in K_SNS_AUTH_RUNTIME KARIYA_SNS_PUBLIC_ORIGIN K_SNS_TRANSACTION_DATABASE_URL K_SNS_TRANSACTION_DATABASE_CA_PATH K_SNS_TRANSACTION_KEK_ID K_SNS_TRANSACTION_KEK_CURRENT_VERSION K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION K_SNS_CLOUD_CA_BUNDLE_PATH K_SNS_CLOUD_CRL_PATH K_SNS_CLOUD_CLIENT_CERT_PATH K_SNS_CLOUD_CLIENT_KEY_PATH K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN K_SNS_CLOUD_MTLS_SERVER_NAME; do grep -q \"^\$key=\" '$REMOTE_ENV_PATH' || exit 1; done; ! grep -Eq '^(K_SNS_TRANSACTION_KMS_KEY_RESOURCE|K_SNS_GCP_WIF_CONFIG_PATH|GOOGLE_APPLICATION_CREDENTIALS)=' '$REMOTE_ENV_PATH'; LOAD=\$(systemctl show '$SYSTEMD_UNIT' --property=LoadCredentialEncrypted --value); printf '%s' \"\$LOAD\" | grep -q 'ksns-transaction-kek-current'; CURRENT=/etc/credstore.encrypted/ksns-transaction-kek-current; test -f \"\$CURRENT\"; test ! -L \"\$CURRENT\"; test \"\$(stat -c '%U:%G:%a' \"\$CURRENT\")\" = root:root:600; PREVIOUS_VERSION=\$(sed -n 's/^K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION=//p' '$REMOTE_ENV_PATH'); if test -n \"\$PREVIOUS_VERSION\"; then printf '%s' \"\$LOAD\" | grep -q 'ksns-transaction-kek-previous'; PREVIOUS=/etc/credstore.encrypted/ksns-transaction-kek-previous; test -f \"\$PREVIOUS\"; test ! -L \"\$PREVIOUS\"; test \"\$(stat -c '%U:%G:%a' \"\$PREVIOUS\")\" = root:root:600; fi"
+          "${SSH[@]}" "$REMOTE" "REMOTE_ENV_PATH='$REMOTE_ENV_PATH' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_CUSTODY'
+          set -euo pipefail
 
-      - name: Stage and verify immutable K-SNS image
+          credential_loaded() {
+            local name="$1"
+            local load
+            load=$(systemctl show "$SYSTEMD_UNIT" --property=LoadCredentialEncrypted --value)
+            if grep -q "$name" <<<"$load"; then
+              return 0
+            fi
+            grep -Fq '[unprintable]' <<<"$load" || return 1
+            grep -Eq "^LoadCredentialEncrypted=${name}(:|$)" < <(systemctl cat "$SYSTEMD_UNIT")
+          }
+
+          test -f "$REMOTE_ENV_PATH"
+          test ! -L "$REMOTE_ENV_PATH"
+          test "$(stat -c '%a' "$REMOTE_ENV_PATH")" = 600
+          for key in K_SNS_AUTH_RUNTIME KARIYA_SNS_PUBLIC_ORIGIN K_SNS_TRANSACTION_KEK_ID K_SNS_TRANSACTION_KEK_CURRENT_VERSION K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN K_SNS_CLOUD_MTLS_SERVER_NAME; do
+            grep -q "^$key=" "$REMOTE_ENV_PATH" || exit 1
+          done
+          ! grep -Eq '^(K_SNS_TRANSACTION_KMS_KEY_RESOURCE|K_SNS_GCP_WIF_CONFIG_PATH|GOOGLE_APPLICATION_CREDENTIALS)=' "$REMOTE_ENV_PATH"
+          for credential in ksns-transaction-kek-current ksns-db-url ksns-db-ca.pem cloud-client-cert.pem cloud-client-key.pem cloud-ca-bundle.pem cloud-crl.pem; do
+            credential_loaded "$credential"
+            path="/etc/credstore.encrypted/$credential"
+            test -f "$path"
+            test ! -L "$path"
+            test "$(stat -c '%U:%G:%a' "$path")" = root:root:600
+          done
+          PREVIOUS_VERSION=$(sed -n 's/^K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION=//p' "$REMOTE_ENV_PATH")
+          if test -n "$PREVIOUS_VERSION"; then
+            credential_loaded ksns-transaction-kek-previous
+            PREVIOUS=/etc/credstore.encrypted/ksns-transaction-kek-previous
+            test -f "$PREVIOUS"
+            test ! -L "$PREVIOUS"
+            test "$(stat -c '%U:%G:%a' "$PREVIOUS")" = root:root:600
+          fi
+          REMOTE_CUSTODY
+
+      - name: Stage and verify immutable K-SNS systemd release
         shell: bash
         run: |
           set -euo pipefail
@@ -102,12 +144,91 @@ jobs:
           RELEASE_DIR="$SERVICE_PATH/.release-staging/$SHA"
           ROLLBACK_FILE="$SERVICE_PATH/.release-state/sns-$SHA.rollback"
 
-          "${SSH[@]}" "$REMOTE" "set -eu; umask 077; mkdir -p '$RELEASE_DIR' '$SERVICE_PATH/.release-state'"
-          rsync -az --delete --exclude='.git' --exclude='.env*' --exclude='node_modules' -e "ssh -i $DEPLOY_KEY_PATH -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_PATH" ./ "$REMOTE:$RELEASE_DIR/"
-          "${SSH[@]}" "$REMOTE" "set -eu; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); test -n \"\$IMAGE_REF\"; PREVIOUS_ID=\$(docker image inspect --format '{{.Id}}' \"\$IMAGE_REF\" 2>/dev/null || true); printf '%s\n' \"\$PREVIOUS_ID\" > '$ROLLBACK_FILE'; chmod 600 '$ROLLBACK_FILE'; cd '$RELEASE_DIR'; docker build --pull=false --build-arg KARIYA_SOURCE_REVISION='$SHA' -t \"\$IMAGE_REF\" .; test \"\$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' \"\$IMAGE_REF\")\" = '$SHA'; cd '$SERVICE_PATH'; systemctl restart '$SYSTEMD_UNIT'; test \"\$(systemctl is-active '$SYSTEMD_UNIT')\" = active"
+          "${SSH[@]}" "$REMOTE" "set -eu; umask 077; mkdir -p '$RELEASE_DIR' '$SERVICE_PATH/.release-state'; chmod 0755 '$SERVICE_PATH/.release-staging'"
+          rsync -az --delete --exclude='.git' --exclude='.env*' --exclude='/node_modules' -e "ssh -i $DEPLOY_KEY_PATH -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_PATH" ./ "$REMOTE:$RELEASE_DIR/"
+          if ! "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' RELEASE_DIR='$RELEASE_DIR' ROLLBACK_FILE='$ROLLBACK_FILE' SHA='$SHA' SYSTEMD_UNIT='$SYSTEMD_UNIT' REMOTE_ENV_PATH='$REMOTE_ENV_PATH' bash -s" <<'REMOTE_DEPLOY'
+          set -euo pipefail
 
-          if ! "${SSH[@]}" "$REMOTE" "set -eu; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy; IMAGE_ID=\$(docker inspect --format '{{.Image}}' '$SERVICE_NAME'); test \"\$(docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' \"\$IMAGE_ID\")\" = '$SHA'; APP_USER=\$(docker inspect --format '{{.Config.User}}' '$SERVICE_NAME'); test -n \"\$APP_USER\"; test \"\$APP_USER\" != 0; test \"\$APP_USER\" != root; CRED_DIR=\$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' '$SERVICE_NAME' | sed -n 's/^CREDENTIALS_DIRECTORY=//p'); case \"\$CRED_DIR\" in /run/credentials/*) ;; *) exit 1 ;; esac; docker inspect --format '{{range .Mounts}}{{println .Destination .RW}}{{end}}' '$SERVICE_NAME' | grep -Fqx \"\$CRED_DIR false\""; then
-            "${SSH[@]}" "$REMOTE" "set -eu; PREVIOUS_ID=\$(cat '$ROLLBACK_FILE'); test -n \"\$PREVIOUS_ID\"; cd '$SERVICE_PATH'; IMAGE_REF=\$(docker compose config --images '$SERVICE_NAME'); docker tag \"\$PREVIOUS_ID\" \"\$IMAGE_REF\"; systemctl restart '$SYSTEMD_UNIT'; test \"\$(systemctl is-active '$SYSTEMD_UNIT')\" = active; test \"\$(docker inspect --format '{{.State.Health.Status}}' '$SERVICE_NAME')\" = healthy"
-            echo "Immutable K-SNS health failed; prior image digest restored."
+          health_check() {
+            local port
+            port=$(sed -n 's/^PORT=//p' "$REMOTE_ENV_PATH" | tail -n 1)
+            case "$port" in ''|*[!0-9]*) port=3010 ;; esac
+            for _ in $(seq 1 20); do
+              if PORT="$port" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+
+          test -f "$RELEASE_DIR/.next/standalone/server.js"
+          printf '%s\n' "$SHA" > "$RELEASE_DIR/REVISION"
+          chmod 0644 "$RELEASE_DIR/REVISION"
+          previous_release=$(readlink -f "$SERVICE_PATH/current" 2>/dev/null || true)
+          printf '%s\n' "$previous_release" > "$ROLLBACK_FILE"
+          chmod 600 "$ROLLBACK_FILE"
+          chown -R root:root "$RELEASE_DIR"
+          find "$RELEASE_DIR" -type d -exec chmod 0755 {} +
+          find "$RELEASE_DIR" -type f -exec chmod 0644 {} +
+          ln -sfn ../../static "$RELEASE_DIR/.next/standalone/.next/static"
+          if test -d "$RELEASE_DIR/public"; then
+            ln -sfn ../../public "$RELEASE_DIR/.next/standalone/public"
+          fi
+          ln -sfn "$RELEASE_DIR" "$SERVICE_PATH/current.next"
+          mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
+          systemctl restart "$SYSTEMD_UNIT"
+          test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
+          test "$(readlink -f "$SERVICE_PATH/current")" = "$RELEASE_DIR"
+          test "$(cat "$SERVICE_PATH/current/REVISION")" = "$SHA"
+          app_user=$(systemctl show "$SYSTEMD_UNIT" --property=User --value)
+          test -n "$app_user"
+          test "$app_user" != root
+          health_check
+          REMOTE_DEPLOY
+          then
+          "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
+          set -euo pipefail
+          previous_release=$(cat "$ROLLBACK_FILE")
+          test -n "$previous_release"
+          test -d "$previous_release"
+          ln -sfn "$previous_release" "$SERVICE_PATH/current.next"
+          mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
+          systemctl restart "$SYSTEMD_UNIT"
+          test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
+          REMOTE_ROLLBACK
+            echo "Immutable K-SNS deploy failed; prior systemd release restored."
+            exit 1
+          fi
+
+          if ! "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' REMOTE_ENV_PATH='$REMOTE_ENV_PATH' bash -s" <<'REMOTE_VERIFY'
+          set -euo pipefail
+          health_check() {
+            local port
+            port=$(sed -n 's/^PORT=//p' "$REMOTE_ENV_PATH" | tail -n 1)
+            case "$port" in ''|*[!0-9]*) port=3010 ;; esac
+            for _ in $(seq 1 20); do
+              if PORT="$port" node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+          test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
+          health_check
+          REMOTE_VERIFY
+          then
+          "${SSH[@]}" "$REMOTE" "SERVICE_PATH='$SERVICE_PATH' ROLLBACK_FILE='$ROLLBACK_FILE' SYSTEMD_UNIT='$SYSTEMD_UNIT' bash -s" <<'REMOTE_ROLLBACK'
+          set -euo pipefail
+          previous_release=$(cat "$ROLLBACK_FILE")
+          test -n "$previous_release"
+          test -d "$previous_release"
+          ln -sfn "$previous_release" "$SERVICE_PATH/current.next"
+          mv -Tf "$SERVICE_PATH/current.next" "$SERVICE_PATH/current"
+          systemctl restart "$SYSTEMD_UNIT"
+          test "$(systemctl is-active "$SYSTEMD_UNIT")" = active
+          REMOTE_ROLLBACK
+            echo "Immutable K-SNS health failed; prior systemd release restored."
             exit 1
           fi

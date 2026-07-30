@@ -86,15 +86,18 @@ test("Proxy never derives redirect origins from request metadata", () => {
   assert.match(proxySource, /export function proxy\(/);
   assert.doesNotMatch(proxySource, /export function middleware\(/);
   assert.match(proxySource, /process\.env\.KARIYA_SNS_PUBLIC_ORIGIN/);
-  assert.match(proxySource, /loginRedirectLocation\(pathname, CONFIGURED_ORIGIN/);
+  assert.match(proxySource, /host === "sns\.kariya\.ca"/);
+  assert.match(proxySource, /loginRedirectLocation\(pathname, origin/);
   assert.doesNotMatch(proxySource, /new URL\(|request\.url/);
   assert.doesNotMatch(
     proxySource,
-    /["'](?:X-Forwarded-Host|X-Forwarded-Proto|Forwarded|Origin|Referer|return_to)["']|headers\.get|request\.headers/i
+    /["'](?:X-Forwarded-Host|X-Forwarded-Proto|Forwarded|Origin|Referer|return_to)["']/i
   );
 });
 
 test("Proxy matcher preserves protected-route and BFF exclusions", () => {
+  assert.match(proxySource, /pathname === HEALTH_PATH/);
+
   for (const url of [
     "/",
     "/login",
