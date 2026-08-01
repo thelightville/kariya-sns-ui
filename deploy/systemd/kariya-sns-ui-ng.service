@@ -15,14 +15,12 @@ Environment=K_SNS_TRANSACTION_DATABASE_CA_PATH=%d/ksns-db-ca.pem
 Environment=K_SNS_CLOUD_CLIENT_CERT_PATH=%d/cloud-client-cert.pem
 Environment=K_SNS_CLOUD_CLIENT_KEY_PATH=%d/cloud-client-key.pem
 Environment=K_SNS_CLOUD_CA_BUNDLE_PATH=%d/cloud-ca-bundle.pem
-Environment=K_SNS_CLOUD_CRL_PATH=%d/cloud-crl.pem
 LoadCredentialEncrypted=ksns-transaction-kek-current:/etc/credstore.encrypted/ksns-ui-ng-transaction-kek-current
 LoadCredentialEncrypted=ksns-transaction-kek-previous:/etc/credstore.encrypted/ksns-ui-ng-transaction-kek-previous
 LoadCredentialEncrypted=ksns-db-ca.pem:/etc/credstore.encrypted/ksns-ui-ng-db-ca.pem
 LoadCredentialEncrypted=cloud-client-cert.pem:/etc/credstore.encrypted/ksns-ui-ng-cloud-client-cert.pem
 LoadCredentialEncrypted=cloud-client-key.pem:/etc/credstore.encrypted/ksns-ui-ng-cloud-client-key.pem
 LoadCredentialEncrypted=cloud-ca-bundle.pem:/etc/credstore.encrypted/ksns-ui-ng-cloud-ca-bundle.pem
-LoadCredentialEncrypted=cloud-crl.pem:/etc/credstore.encrypted/ksns-ui-ng-cloud-crl.pem
 ExecStartPre=/usr/bin/node /opt/kariya/sns/current/scripts/verify-regional-ui-instance.mjs --region ng
 ExecStart=/usr/bin/node /opt/kariya/sns/current/.next/standalone/server.js
 Restart=on-failure

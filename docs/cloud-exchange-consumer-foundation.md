@@ -91,7 +91,7 @@ systemd credential custody, HA/failover, certificate, ingress, or production cra
 
 Production is selected only by the protected server setting
 `K_SNS_AUTH_RUNTIME=production`. Any missing or malformed database, regional
-systemd credential, certificate, key, CA, CRL, origin, or trust setting leaves the unavailable
+systemd credential, certificate, key, replacement-CA, origin, or trust setting leaves the unavailable
 runtime selected. No protected setting uses a `NEXT_PUBLIC_` name.
 
 The production adapter uses a TLS-validated Node `pg` pool and performs a
@@ -116,17 +116,23 @@ cross-region, tampered, missing, malformed, symlinked, non-root, or
 permission-invalid credentials fail closed.
 
 K-SNS-to-Cloud calls use direct TLS 1.3 mutual authentication with protected
-read-only client-certificate, private-key, CA-bundle, and CRL mounts. The leaf
-must match its private key, be P-256/non-CA, contain exactly the paired regional
-SPIFFE URI SAN and clientAuth EKU, and remain within the 30-day profile. Calls
-have a three-second timeout and 64 KiB body bound, do not use a proxy, do not
-follow redirects, disable keep-alive/session caching, and reload trust material
-for each call. Caller Host/Forwarded headers never select region or identity.
+read-only client-certificate, private-key, and single replacement-CA mounts.
+The replacement trust anchor must be a current self-signed P-256/SHA-256 CA
+with path length zero, keyCertSign only, and no CRL-sign capability. Each leaf
+must match its private key, be P-256/non-CA/SHA-256, contain only the paired
+regional SPIFFE URI SAN, clientAuth EKU, and digitalSignature key usage, and
+have a lifetime no longer than 24 hours. The Cloud server leaf is held to the
+same lifetime/key profile with its exact regional DNS SAN and serverAuth EKU.
+Calls have a three-second timeout and 64 KiB body bound, do not use a proxy,
+do not follow redirects or reuse TLS sessions, and reload trust material for each
+call. Caller Host/Forwarded headers never select region or identity.
 
 The pool, credential provider and Cloud client expose idempotent shutdown; SIGTERM and
-SIGINT initiate graceful closure. Current/next certificate delivery, trust
-epoch, CRL freshness, revocation, encrypted credential installation, database provisioning,
-migration application and deployment remain external release gates. This
+SIGINT initiate graceful closure. Revocation is Cloud's fail-closed removal of
+the exact SPIFFE identity from its immutable authorization set after successful
+TLS validation; CRL and OCSP interfaces are prohibited. Certificate delivery,
+trust replacement, authorization-set publication, encrypted credential installation,
+database provisioning, migration application and deployment remain external release gates. This
 branch contains no certificate, private key, credential or provider-specific cloud resource and is
 not a production-readiness claim.
 

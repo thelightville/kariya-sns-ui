@@ -18,6 +18,20 @@ test("contract defines exactly two isolated public UI instances", () => {
   const contract = validateTopologyContract(loadTopologyContract());
   assert.deepEqual(Object.keys(contract.instances).sort(), ["ca", "ng"]);
   assert.equal(contract.instances.ng.listener, "127.0.0.1:3011");
+  assert.deepEqual(contract.unit_bound_environment, [
+    "K_SNS_TRANSACTION_DATABASE_CA_PATH",
+    "K_SNS_CLOUD_CLIENT_CERT_PATH",
+    "K_SNS_CLOUD_CLIENT_KEY_PATH",
+    "K_SNS_CLOUD_CA_BUNDLE_PATH",
+  ]);
+  assert.deepEqual(contract.credential_runtime_ids, [
+    "ksns-transaction-kek-current",
+    "ksns-transaction-kek-previous",
+    "ksns-db-ca.pem",
+    "cloud-client-cert.pem",
+    "cloud-client-key.pem",
+    "cloud-ca-bundle.pem",
+  ]);
   assert.equal(contract.instances.ca.listener, "127.0.0.1:3012");
   assert.equal(contract.legacy_ui.fallback, "prohibited");
   assert.equal(contract.backend_api.public_ui_routing, "prohibited");
@@ -34,6 +48,7 @@ for (const region of ["ng", "ca"]) test(`${region} unit binds only its exact env
   assert.match(unit, new RegExp(`EnvironmentFile=${instance.environment_file}`));
   assert.match(unit, new RegExp(`--region ${region}`));
   assert.match(unit, new RegExp(`/ksns-ui-${region}-cloud-client-cert\\.pem`));
+  assert.doesNotMatch(unit, /crl/iu);
   assert.doesNotMatch(unit, new RegExp(`ksns-ui-${region === "ng" ? "ca" : "ng"}-`));
   assert.doesNotMatch(unit, /172\.16\.16\.119:8019|127\.0\.0\.1:8019|127\.0\.0\.1:8020/u);
 });

@@ -10,7 +10,9 @@ CT119 remains quiesced and production authentication remains paused.
 
 Both processes run as `kariya_ksns_auth:kariya_ksns_auth` from the same reviewed immutable release under `/opt/kariya/sns/current`. Each unit has a separate systemd credential directory and loads only encrypted-at-rest sources beginning with `ksns-ui-ng-` or `ksns-ui-ca-`. Runtime aliases are scoped to that private credential directory. Existing application validation requires exactly the configured regional SPIFFE URI and its matching private key.
 
-The required protected environment keys are machine-readable in `deploy/ct119-ui-instances.json`. Certificate, key, trust, CRL, and database-CA paths are unit-bound to `%d`; they cannot be replaced by environment-file paths. Missing, legacy, cross-region, or malformed configuration keeps startup or the authentication boundary unavailable.
+The required protected environment keys are machine-readable in `deploy/ct119-ui-instances.json`. Certificate, key, single replacement-CA trust, and database-CA paths are unit-bound to `%d`; they cannot be replaced by environment-file paths. The trust file must contain exactly one current replacement anchor; legacy anchors, overlap bundles, CRL/OCSP material, missing or malformed trust, cross-region identities, and leaves exceeding 24 hours all keep startup or the authentication boundary unavailable.
+
+After TLS validation, revocation is owned by Cloud's immutable authorization set: removing the exact regional SPIFFE identity causes every request to fail closed. K-SNS has no local revocation list, authorization fallback, or backend-route fallback.
 
 `GET /api/health` returns 200 for process health. Unauthenticated `/overview` returns 307 to login, and unauthenticated `/api/ksns/incidents` returns 401. Dependency or credential failure never becomes permissive.
 

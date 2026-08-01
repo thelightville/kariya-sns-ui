@@ -117,7 +117,7 @@ jobs:
             grep -q "^$key=" "$REMOTE_ENV_PATH" || exit 1
           done
           ! grep -Eq '^(K_SNS_TRANSACTION_KMS_KEY_RESOURCE|K_SNS_GCP_WIF_CONFIG_PATH|GOOGLE_APPLICATION_CREDENTIALS)=' "$REMOTE_ENV_PATH"
-          for credential in ksns-transaction-kek-current ksns-db-url ksns-db-ca.pem cloud-client-cert.pem cloud-client-key.pem cloud-ca-bundle.pem cloud-crl.pem; do
+          for credential in ksns-transaction-kek-current ksns-db-url ksns-db-ca.pem cloud-client-cert.pem cloud-client-key.pem cloud-ca-bundle.pem; do
             credential_loaded "$credential"
             path="/etc/credstore.encrypted/$credential"
             test -f "$path"
