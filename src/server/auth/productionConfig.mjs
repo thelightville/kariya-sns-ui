@@ -155,7 +155,6 @@ export function loadProductionAuthConfig(env = process.env) {
     client_certificate_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CLIENT_CERT_PATH"),
     client_private_key_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CLIENT_KEY_PATH"),
     cloud_ca_bundle_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CA_BUNDLE_PATH"),
-    cloud_crl_path: protectedAbsolutePath(env, "K_SNS_CLOUD_CRL_PATH"),
     endpoints: cloudEndpoints(transportOrigin),
     schema_head: AUTH_SCHEMA_HEAD,
     request_timeout_ms: CLOUD_REQUEST_TIMEOUT_MS,

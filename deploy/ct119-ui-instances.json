@@ -1,0 +1,14 @@
+{
+  "schema": "kariya.ksns.ct119-ui-instances.v1",
+  "physical_origin": { "host": "kariya-cloud", "address": "172.16.16.119", "deployment_root": "/opt/kariya/sns", "current_release": "/opt/kariya/sns/current" },
+  "runtime": { "user": "kariya_ksns_auth", "group": "kariya_ksns_auth", "health": { "path": "/api/health", "status": 200 }, "unauthenticated": { "/overview": 307, "/api/ksns/incidents": 401 } },
+  "instances": {
+    "ng": { "service": "kariya-sns-ui-ng.service", "hostname": "sns.kariya.ng", "public_origin": "https://sns.kariya.ng", "listener": "127.0.0.1:3011", "environment_file": "/etc/kariya/sns-ui-ng.env", "client_identity": "spiffe://kariya/services/ksns/ng", "cloud_server_name": "cloud-auth.ng.internal.kariya", "credential_source_prefix": "ksns-ui-ng-" },
+    "ca": { "service": "kariya-sns-ui-ca.service", "hostname": "sns.kariya.ca", "public_origin": "https://sns.kariya.ca", "listener": "127.0.0.1:3012", "environment_file": "/etc/kariya/sns-ui-ca.env", "client_identity": "spiffe://kariya/services/ksns/ca", "cloud_server_name": "cloud-auth.ca.internal.kariya", "credential_source_prefix": "ksns-ui-ca-" }
+  },
+  "required_environment": ["K_SNS_AUTH_RUNTIME", "KARIYA_SNS_REGION", "KARIYA_SNS_PUBLIC_ORIGIN", "KARIYA_SNS_LISTEN_HOST", "PORT", "K_SNS_TRANSACTION_DATABASE_URL", "K_SNS_TRANSACTION_KEK_ID", "K_SNS_TRANSACTION_KEK_CURRENT_VERSION", "K_SNS_TRANSACTION_KEK_PREVIOUS_VERSION", "K_SNS_CLOUD_MTLS_TRANSPORT_ORIGIN", "K_SNS_CLOUD_MTLS_SERVER_NAME"],
+  "unit_bound_environment": ["K_SNS_TRANSACTION_DATABASE_CA_PATH", "K_SNS_CLOUD_CLIENT_CERT_PATH", "K_SNS_CLOUD_CLIENT_KEY_PATH", "K_SNS_CLOUD_CA_BUNDLE_PATH"],
+  "credential_runtime_ids": ["ksns-transaction-kek-current", "ksns-transaction-kek-previous", "ksns-db-ca.pem", "cloud-client-cert.pem", "cloud-client-key.pem", "cloud-ca-bundle.pem"],
+  "legacy_ui": { "service": "kariya-sns-ui-v1.service", "listener": "0.0.0.0:3011", "disposition": "stop-disable-before-ng-activation", "fallback": "prohibited" },
+  "backend_api": { "service": "kariya-sns.service", "listener": "172.16.16.119:8019", "public_ui_routing": "prohibited" }
+}
