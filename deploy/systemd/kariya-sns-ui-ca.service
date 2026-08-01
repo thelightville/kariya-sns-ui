@@ -1,0 +1,39 @@
+[Unit]
+Description=Kariya K-SNS public UI (Canada)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kariya_ksns_auth
+Group=kariya_ksns_auth
+WorkingDirectory=/opt/kariya/sns/current/.next/standalone
+EnvironmentFile=/etc/kariya/sns-ui-ca.env
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=K_SNS_TRANSACTION_DATABASE_CA_PATH=%d/ksns-db-ca.pem
+Environment=K_SNS_CLOUD_CLIENT_CERT_PATH=%d/cloud-client-cert.pem
+Environment=K_SNS_CLOUD_CLIENT_KEY_PATH=%d/cloud-client-key.pem
+Environment=K_SNS_CLOUD_CA_BUNDLE_PATH=%d/cloud-ca-bundle.pem
+Environment=K_SNS_CLOUD_CRL_PATH=%d/cloud-crl.pem
+LoadCredentialEncrypted=ksns-transaction-kek-current:/etc/credstore.encrypted/ksns-ui-ca-transaction-kek-current
+LoadCredentialEncrypted=ksns-transaction-kek-previous:/etc/credstore.encrypted/ksns-ui-ca-transaction-kek-previous
+LoadCredentialEncrypted=ksns-db-ca.pem:/etc/credstore.encrypted/ksns-ui-ca-db-ca.pem
+LoadCredentialEncrypted=cloud-client-cert.pem:/etc/credstore.encrypted/ksns-ui-ca-cloud-client-cert.pem
+LoadCredentialEncrypted=cloud-client-key.pem:/etc/credstore.encrypted/ksns-ui-ca-cloud-client-key.pem
+LoadCredentialEncrypted=cloud-ca-bundle.pem:/etc/credstore.encrypted/ksns-ui-ca-cloud-ca-bundle.pem
+LoadCredentialEncrypted=cloud-crl.pem:/etc/credstore.encrypted/ksns-ui-ca-cloud-crl.pem
+ExecStartPre=/usr/bin/node /opt/kariya/sns/current/scripts/verify-regional-ui-instance.mjs --region ca
+ExecStart=/usr/bin/node /opt/kariya/sns/current/.next/standalone/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
