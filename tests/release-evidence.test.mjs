@@ -17,6 +17,9 @@ function run(arguments_, expected = 0) {
 function fakeBundle(index) {
   return `${JSON.stringify({ mediaType: "application/vnd.dev.sigstore.bundle+json;version=0.3", verificationMaterial: { tlogEntries: [{ logIndex: String(index) }] } })}\n`;
 }
+function fakeLegacyBundle(index) {
+  return `${JSON.stringify({ base64Signature: "test", cert: "test", rekorBundle: { Payload: { logIndex: index } } })}\n`;
+}
 
 test("artifact, SBOM and provenance bind exact workflow trust and retained Sigstore bundles", { skip: !buildAvailable }, () => {
   const temporary = mkdtempSync(path.join(tmpdir(), "ksns-ui-evidence-"));
@@ -36,7 +39,8 @@ test("artifact, SBOM and provenance bind exact workflow trust and retained Sigst
     assert.deepEqual(readFileSync(path.join(first, artifact)), readFileSync(path.join(second, artifact)));
     assert.deepEqual(readFileSync(path.join(first, `${prefix}.cdx.json`)), readFileSync(path.join(second, `${prefix}.cdx.json`)));
     assert.deepEqual(readFileSync(path.join(first, `${prefix}.provenance.json`)), readFileSync(path.join(second, `${prefix}.provenance.json`)));
-    for (const [name, index] of [[artifact, 11], [`${prefix}.cdx.json`, 12], [`${prefix}.provenance.json`, 13]]) writeFileSync(path.join(first, `${name}.sigstore.json`), fakeBundle(index));
+    writeFileSync(path.join(first, `${artifact}.sigstore.json`), fakeLegacyBundle(11));
+    for (const [name, index] of [[`${prefix}.cdx.json`, 12], [`${prefix}.provenance.json`, 13]]) writeFileSync(path.join(first, `${name}.sigstore.json`), fakeBundle(index));
     run(["bind", ...parameters, "--output-dir", first]);
     const manifestPath = path.join(first, `${prefix}.evidence.json`);
     const manifest = JSON.parse(readFileSync(manifestPath));
