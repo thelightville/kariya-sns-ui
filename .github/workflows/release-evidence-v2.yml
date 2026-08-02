@@ -28,6 +28,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
         run: |
           set -euo pipefail
+          mkdir -p public
           npm ci
           npm run build
           npm test
