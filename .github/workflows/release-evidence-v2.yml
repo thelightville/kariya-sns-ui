@@ -1,4 +1,4 @@
-name: K-SNS UI release evidence v1
+name: K-SNS UI release evidence v2
 
 on:
   pull_request:
@@ -10,9 +10,12 @@ permissions:
 
 jobs:
   exact-head-evidence:
-    name: Exact-head artifact, SBOM and provenance
+    name: Exact-head artifact, SBOM and keyless provenance
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -22,6 +25,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.10.0
       - name: Build exact source
         env:
           NEXT_PUBLIC_APP_DOMAIN: sns.kariya.ng
@@ -33,19 +37,72 @@ jobs:
           npm run build
           npm test
           npm run lint
-      - name: Build and independently verify release evidence
+      - name: Build deterministic release evidence
+        id: evidence
         shell: bash
         run: |
           set -euo pipefail
           HEAD_SHA=$(git rev-parse HEAD)
           TREE_SHA=$(git show -s --format=%T HEAD)
-          openssl genpkey -algorithm Ed25519 -out "$RUNNER_TEMP/ksns-ui-provenance-key.pem"
-          node scripts/release-evidence.mjs build --head "$HEAD_SHA" --tree "$TREE_SHA" --output-dir "$RUNNER_TEMP/release-evidence" --signing-key "$RUNNER_TEMP/ksns-ui-provenance-key.pem"
-          node scripts/release-evidence.mjs verify --head "$HEAD_SHA" --tree "$TREE_SHA" --output-dir "$RUNNER_TEMP/release-evidence"
+          WORKFLOW_REF="${{ github.workflow_ref }}"
+          WORKFLOW_SHA="${{ github.workflow_sha }}"
+          CERTIFICATE_IDENTITY="https://github.com/${WORKFLOW_REF}"
+          OIDC_ISSUER="https://token.actions.githubusercontent.com"
+          OUTPUT="$RUNNER_TEMP/release-evidence"
+          node scripts/release-evidence.mjs build \
+            --head "$HEAD_SHA" \
+            --tree "$TREE_SHA" \
+            --output-dir "$OUTPUT" \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --oidc-issuer "$OIDC_ISSUER" \
+            --workflow-ref "$WORKFLOW_REF" \
+            --workflow-sha "$WORKFLOW_SHA"
+          {
+            echo "head=$HEAD_SHA"
+            echo "tree=$TREE_SHA"
+            echo "output=$OUTPUT"
+            echo "certificate_identity=$CERTIFICATE_IDENTITY"
+            echo "oidc_issuer=$OIDC_ISSUER"
+            echo "workflow_ref=$WORKFLOW_REF"
+            echo "workflow_sha=$WORKFLOW_SHA"
+          } >> "$GITHUB_OUTPUT"
+      - name: Sign subjects with GitHub OIDC and Sigstore
+        shell: bash
+        env:
+          OUTPUT: "${{ steps.evidence.outputs.output }}"
+          HEAD_SHA: "${{ steps.evidence.outputs.head }}"
+        run: |
+          set -euo pipefail
+          prefix="$OUTPUT/kariya-sns-ui-$HEAD_SHA"
+          for subject in "$prefix.tar.gz" "$prefix.cdx.json" "$prefix.provenance.json"; do
+            cosign sign-blob --yes --bundle "$subject.sigstore.json" "$subject"
+          done
+          node scripts/release-evidence.mjs bind \
+            --head "${{ steps.evidence.outputs.head }}" \
+            --tree "${{ steps.evidence.outputs.tree }}" \
+            --output-dir "$OUTPUT" \
+            --certificate-identity "${{ steps.evidence.outputs.certificate_identity }}" \
+            --oidc-issuer "${{ steps.evidence.outputs.oidc_issuer }}" \
+            --workflow-ref "${{ steps.evidence.outputs.workflow_ref }}" \
+            --workflow-sha "${{ steps.evidence.outputs.workflow_sha }}"
+          cosign sign-blob --yes --bundle "$prefix.evidence.json.sigstore.json" "$prefix.evidence.json"
+      - name: Independently verify signer and signed subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release-evidence.mjs verify \
+            --head "${{ steps.evidence.outputs.head }}" \
+            --tree "${{ steps.evidence.outputs.tree }}" \
+            --output-dir "${{ steps.evidence.outputs.output }}" \
+            --certificate-identity "${{ steps.evidence.outputs.certificate_identity }}" \
+            --oidc-issuer "${{ steps.evidence.outputs.oidc_issuer }}" \
+            --workflow-ref "${{ steps.evidence.outputs.workflow_ref }}" \
+            --workflow-sha "${{ steps.evidence.outputs.workflow_sha }}" \
+            --cosign "$(command -v cosign)"
       - name: Retain exact-head evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ksns-ui-release-evidence-${{ github.event.pull_request.head.sha || github.sha }}
-          path: "${{ runner.temp }}/release-evidence/"
+          name: ksns-ui-release-evidence-${{ steps.evidence.outputs.head }}
+          path: "${{ steps.evidence.outputs.output }}/"
           if-no-files-found: error
           retention-days: 30
