@@ -1,0 +1,50 @@
+name: K-SNS UI release evidence v1
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-evidence:
+    name: Exact-head artifact, SBOM and provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: "${{ github.event.pull_request.head.sha || github.sha }}"
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Build exact source
+        env:
+          NEXT_PUBLIC_APP_DOMAIN: sns.kariya.ng
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm test
+          npm run lint
+      - name: Build and independently verify release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(git rev-parse HEAD)
+          TREE_SHA=$(git show -s --format=%T HEAD)
+          openssl genpkey -algorithm Ed25519 -out "$RUNNER_TEMP/ksns-ui-provenance-key.pem"
+          node scripts/release-evidence.mjs build --head "$HEAD_SHA" --tree "$TREE_SHA" --output-dir "$RUNNER_TEMP/release-evidence" --signing-key "$RUNNER_TEMP/ksns-ui-provenance-key.pem"
+          node scripts/release-evidence.mjs verify --head "$HEAD_SHA" --tree "$TREE_SHA" --output-dir "$RUNNER_TEMP/release-evidence"
+      - name: Retain exact-head evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ksns-ui-release-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: "${{ runner.temp }}/release-evidence/"
+          if-no-files-found: error
+          retention-days: 30
