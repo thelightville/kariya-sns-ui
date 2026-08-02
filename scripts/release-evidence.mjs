@@ -9,6 +9,9 @@ const ROOT = process.cwd();
 const REPOSITORY = "thelightville/kariya-sns-ui";
 const WORKFLOW_PATH = ".github/workflows/release-evidence-v2.yml";
 const ISSUER = "https://token.actions.githubusercontent.com";
+const EXPECTED_WORKFLOW_REF = "thelightville/kariya-sns-ui/.github/workflows/release-evidence-v2.yml@refs/pull/44/merge";
+const EXPECTED_WORKFLOW_SHA = "84268e64632d7933cc5d5963d866775dc426c875";
+const EXPECTED_CERTIFICATE_IDENTITY = `https://github.com/${EXPECTED_WORKFLOW_REF}`;
 const IDENTITIES = ["package.json", "package-lock.json", "next.config.mjs", ".github/workflows/deploy.yml", WORKFLOW_PATH, "deploy/ct119-ui-instances.json", "deploy/systemd/kariya-sns-ui-ng.service", "deploy/systemd/kariya-sns-ui-ca.service"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
@@ -37,13 +40,11 @@ function revision(head, tree) {
   assert.equal(git("status", "--porcelain"), "", "checkout must be clean");
 }
 function trust(values) {
-  const expectedPrefix = `https://github.com/${REPOSITORY}/${WORKFLOW_PATH}@`;
   assert.equal(values["oidc-issuer"], ISSUER, "OIDC issuer mismatch");
-  assert.equal(values["certificate-identity"], `https://github.com/${values["workflow-ref"]}`, "certificate identity/workflow ref mismatch");
-  assert.ok(values["certificate-identity"].startsWith(expectedPrefix), "repository or workflow identity mismatch");
-  assert.match(values["workflow-ref"], new RegExp(`^${REPOSITORY.replaceAll("/", "\\/")}\\/${WORKFLOW_PATH.replaceAll(".", "\\.")}@refs\\/(pull\\/44\\/merge|heads\\/main)$`), "workflow ref is not authorized");
-  assert.match(values["workflow-sha"] ?? "", /^[0-9a-f]{40}$/, "invalid workflow SHA");
-  return { certificateIdentity: values["certificate-identity"], oidcIssuer: ISSUER, repository: REPOSITORY, workflowPath: WORKFLOW_PATH, workflowRef: values["workflow-ref"], workflowSha: values["workflow-sha"] };
+  assert.equal(values["workflow-ref"], EXPECTED_WORKFLOW_REF, "workflow ref is not authorized");
+  assert.equal(values["workflow-sha"], EXPECTED_WORKFLOW_SHA, "workflow SHA is not authorized");
+  assert.equal(values["certificate-identity"], EXPECTED_CERTIFICATE_IDENTITY, "repository or workflow identity mismatch");
+  return { certificateIdentity: EXPECTED_CERTIFICATE_IDENTITY, oidcIssuer: ISSUER, repository: REPOSITORY, workflowPath: WORKFLOW_PATH, workflowRef: EXPECTED_WORKFLOW_REF, workflowSha: EXPECTED_WORKFLOW_SHA };
 }
 function octal(value, width) {
   const encoded = value.toString(8).padStart(width - 1, "0");
@@ -153,7 +154,16 @@ function bind(values) {
   return manifest;
 }
 function cosignVerify(cosign, subject, bundle, expectedTrust) {
-  execFileSync(cosign, ["verify-blob", "--bundle", bundle, "--certificate-identity", expectedTrust.certificateIdentity, "--certificate-oidc-issuer", expectedTrust.oidcIssuer, subject], { cwd: ROOT, encoding: "utf8", stdio: "pipe" });
+  execFileSync(cosign, [
+    "verify-blob",
+    "--bundle", bundle,
+    "--certificate-identity", expectedTrust.certificateIdentity,
+    "--certificate-oidc-issuer", expectedTrust.oidcIssuer,
+    "--certificate-github-workflow-repository", expectedTrust.repository,
+    "--certificate-github-workflow-ref", "refs/pull/44/merge",
+    "--certificate-github-workflow-sha", expectedTrust.workflowSha,
+    subject,
+  ], { cwd: ROOT, encoding: "utf8", stdio: "pipe" });
 }
 function verifyEvidence(values) {
   const { head, tree } = values; revision(head, tree);

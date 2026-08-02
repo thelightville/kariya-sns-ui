@@ -44,9 +44,11 @@ jobs:
           set -euo pipefail
           HEAD_SHA=$(git rev-parse HEAD)
           TREE_SHA=$(git show -s --format=%T HEAD)
-          WORKFLOW_REF="${{ github.workflow_ref }}"
-          WORKFLOW_SHA="${{ github.workflow_sha }}"
-          CERTIFICATE_IDENTITY="https://github.com/${WORKFLOW_REF}"
+          # These are observed certificate claims. The accepted signer policy is
+          # independently pinned inside the reviewed verifier, not defined here.
+          OBSERVED_WORKFLOW_REF="${{ github.workflow_ref }}"
+          OBSERVED_WORKFLOW_SHA="${{ github.workflow_sha }}"
+          CERTIFICATE_IDENTITY="https://github.com/${OBSERVED_WORKFLOW_REF}"
           OIDC_ISSUER="https://token.actions.githubusercontent.com"
           OUTPUT="$RUNNER_TEMP/release-evidence"
           node scripts/release-evidence.mjs build \
@@ -55,16 +57,16 @@ jobs:
             --output-dir "$OUTPUT" \
             --certificate-identity "$CERTIFICATE_IDENTITY" \
             --oidc-issuer "$OIDC_ISSUER" \
-            --workflow-ref "$WORKFLOW_REF" \
-            --workflow-sha "$WORKFLOW_SHA"
+            --workflow-ref "$OBSERVED_WORKFLOW_REF" \
+            --workflow-sha "$OBSERVED_WORKFLOW_SHA"
           {
             echo "head=$HEAD_SHA"
             echo "tree=$TREE_SHA"
             echo "output=$OUTPUT"
             echo "certificate_identity=$CERTIFICATE_IDENTITY"
             echo "oidc_issuer=$OIDC_ISSUER"
-            echo "workflow_ref=$WORKFLOW_REF"
-            echo "workflow_sha=$WORKFLOW_SHA"
+            echo "workflow_ref=$OBSERVED_WORKFLOW_REF"
+            echo "workflow_sha=$OBSERVED_WORKFLOW_SHA"
           } >> "$GITHUB_OUTPUT"
       - name: Sign subjects with GitHub OIDC and Sigstore
         shell: bash
