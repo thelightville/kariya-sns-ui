@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
+import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 const ROOT = process.cwd();
-const IDENTITIES = ["package.json", "package-lock.json", "next.config.mjs", ".github/workflows/deploy.yml", "deploy/ct119-ui-instances.json", "deploy/systemd/kariya-sns-ui-ng.service", "deploy/systemd/kariya-sns-ui-ca.service"];
+const REPOSITORY = "thelightville/kariya-sns-ui";
+const WORKFLOW_PATH = ".github/workflows/release-evidence-v2.yml";
+const ISSUER = "https://token.actions.githubusercontent.com";
+const IDENTITIES = ["package.json", "package-lock.json", "next.config.mjs", ".github/workflows/deploy.yml", WORKFLOW_PATH, "deploy/ct119-ui-instances.json", "deploy/systemd/kariya-sns-ui-ng.service", "deploy/systemd/kariya-sns-ui-ca.service"];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 function stable(value) {
@@ -23,7 +26,7 @@ function args(argv) {
     assert.ok(rest[i + 1], `missing ${rest[i]}`);
     values[rest[i].slice(2)] = rest[i + 1];
   }
-  assert.ok(["build", "verify"].includes(mode), "mode must be build or verify");
+  assert.ok(["build", "bind", "verify"].includes(mode), "mode must be build, bind or verify");
   return { mode, values };
 }
 function revision(head, tree) {
@@ -32,6 +35,15 @@ function revision(head, tree) {
   assert.equal(git("rev-parse", "HEAD"), head, "head mismatch");
   assert.equal(git("show", "-s", "--format=%T", "HEAD"), tree, "tree mismatch");
   assert.equal(git("status", "--porcelain"), "", "checkout must be clean");
+}
+function trust(values) {
+  const expectedPrefix = `https://github.com/${REPOSITORY}/${WORKFLOW_PATH}@`;
+  assert.equal(values["oidc-issuer"], ISSUER, "OIDC issuer mismatch");
+  assert.equal(values["certificate-identity"], `https://github.com/${values["workflow-ref"]}`, "certificate identity/workflow ref mismatch");
+  assert.ok(values["certificate-identity"].startsWith(expectedPrefix), "repository or workflow identity mismatch");
+  assert.match(values["workflow-ref"], new RegExp(`^${REPOSITORY.replaceAll("/", "\\/")}\\/${WORKFLOW_PATH.replaceAll(".", "\\.")}@refs\\/(pull\\/44\\/merge|heads\\/main)$`), "workflow ref is not authorized");
+  assert.match(values["workflow-sha"] ?? "", /^[0-9a-f]{40}$/, "invalid workflow SHA");
+  return { certificateIdentity: values["certificate-identity"], oidcIssuer: ISSUER, repository: REPOSITORY, workflowPath: WORKFLOW_PATH, workflowRef: values["workflow-ref"], workflowSha: values["workflow-sha"] };
 }
 function octal(value, width) {
   const encoded = value.toString(8).padStart(width - 1, "0");
@@ -91,36 +103,72 @@ function sbom(head, tree) {
 const identities = () => Object.fromEntries(IDENTITIES.map((file) => [file, { sha256: sha256(readFileSync(file)) }]));
 function names(head, output) {
   const prefix = `kariya-sns-ui-${head}`;
-  return { artifact: path.join(output, `${prefix}.tar.gz`), sbom: path.join(output, `${prefix}.cdx.json`), provenance: path.join(output, `${prefix}.provenance.json`), signature: path.join(output, `${prefix}.provenance.sig.json`), publicKey: path.join(output, `${prefix}.provenance.pub.pem`), manifest: path.join(output, `${prefix}.evidence.json`) };
+  const artifactName = `${prefix}.tar.gz`;
+  const sbomName = `${prefix}.cdx.json`;
+  const provenanceName = `${prefix}.provenance.json`;
+  const manifestName = `${prefix}.evidence.json`;
+  return {
+    artifact: path.join(output, artifactName), sbom: path.join(output, sbomName), provenance: path.join(output, provenanceName), manifest: path.join(output, manifestName),
+    subjects: { artifact: artifactName, sbom: sbomName, provenance: provenanceName },
+    bundles: { artifact: path.join(output, `${artifactName}.sigstore.json`), sbom: path.join(output, `${sbomName}.sigstore.json`), provenance: path.join(output, `${provenanceName}.sigstore.json`), manifest: path.join(output, `${manifestName}.sigstore.json`) },
+  };
+}
+function bundleRecord(file) {
+  const bytes = readFileSync(file);
+  const bundle = JSON.parse(bytes);
+  const entries = bundle.verificationMaterial?.tlogEntries ?? [];
+  assert.ok(entries.length > 0, `Sigstore bundle has no Rekor entry: ${path.basename(file)}`);
+  const rekorLogIndexes = entries.map((entry) => String(entry.logIndex ?? "")).filter(Boolean).sort();
+  assert.equal(rekorLogIndexes.length, entries.length, "Sigstore bundle missing Rekor log index");
+  return { name: path.basename(file), sha256: sha256(bytes), rekorLogIndexes };
 }
 function build(values) {
   const { head, tree } = values;
-  assert.ok(values["signing-key"], "signing key required");
   revision(head, tree);
+  const signingTrust = trust(values);
   const output = path.resolve(values["output-dir"] ?? "release-evidence");
   rmSync(output, { recursive: true, force: true }); mkdirSync(output, { recursive: true });
   const files = names(head, output); const artifactBytes = artifact(head); const sbomBytes = json(sbom(head, tree));
   writeFileSync(files.artifact, artifactBytes); writeFileSync(files.sbom, sbomBytes);
   const decisions = { rollback: { status: "N/A_PROPOSED", rationale: "No independently bound predecessor rollback artifact is available in the assignment evidence." }, databaseMigration: { status: "N/A_PROPOSED", rationale: "kariya-sns-ui is a schema consumer; this evidence does not imply Cloud schema compatibility." } };
-  const provenanceBytes = json({ _type: "https://in-toto.io/Statement/v1", subject: [{ name: path.basename(files.artifact), digest: { sha256: sha256(artifactBytes) } }, { name: path.basename(files.sbom), digest: { sha256: sha256(sbomBytes) } }], predicateType: "https://slsa.dev/provenance/v1", predicate: { buildDefinition: { buildType: "https://kariya.ca/build-types/nextjs-standalone/v1", externalParameters: { source: { repository: "https://github.com/thelightville/kariya-sns-ui", head, tree } }, internalParameters: { configurationIdentities: identities() }, resolvedDependencies: [{ uri: "pkg:npm/kariya-sns-ui", digest: { sha256: sha256(readFileSync("package-lock.json")) } }] }, runDetails: { builder: { id: "https://github.com/thelightville/kariya-sns-ui/actions" }, metadata: { invocationId: process.env.GITHUB_RUN_ID ?? "local-verification" } }, releaseDecisions: decisions } });
+  const provenanceBytes = json({ _type: "https://in-toto.io/Statement/v1", subject: [{ name: path.basename(files.artifact), digest: { sha256: sha256(artifactBytes) } }, { name: path.basename(files.sbom), digest: { sha256: sha256(sbomBytes) } }], predicateType: "https://slsa.dev/provenance/v1", predicate: { buildDefinition: { buildType: "https://kariya.ca/build-types/nextjs-standalone/v1", externalParameters: { source: { repository: `https://github.com/${REPOSITORY}`, head, tree } }, internalParameters: { configurationIdentities: identities(), signingTrust }, resolvedDependencies: [{ uri: "pkg:npm/kariya-sns-ui", digest: { sha256: sha256(readFileSync("package-lock.json")) } }] }, runDetails: { builder: { id: signingTrust.certificateIdentity }, metadata: { invocationId: process.env.GITHUB_RUN_ID ?? "local-verification" } }, releaseDecisions: decisions } });
   writeFileSync(files.provenance, provenanceBytes);
-  const privateKey = createPrivateKey(readFileSync(values["signing-key"]));
-  assert.equal(privateKey.asymmetricKeyType, "ed25519", "signing key must be Ed25519");
-  writeFileSync(files.publicKey, createPublicKey(privateKey).export({ type: "spki", format: "pem" }));
-  writeFileSync(files.signature, json({ algorithm: "Ed25519", payloadSha256: sha256(provenanceBytes), signature: sign(null, provenanceBytes, privateKey).toString("base64") }));
-  const manifest = { schema: "kariya.ksns-ui.release-evidence.v1", source: { head, tree }, artifact: { name: path.basename(files.artifact), sha256: sha256(artifactBytes) }, sbom: { name: path.basename(files.sbom), sha256: sha256(sbomBytes) }, provenance: { name: path.basename(files.provenance), sha256: sha256(provenanceBytes), signature: path.basename(files.signature), publicKey: path.basename(files.publicKey) }, configurationIdentities: identities(), rollback: decisions.rollback, databaseMigration: decisions.databaseMigration };
+  const manifest = { schema: "kariya.ksns-ui.release-evidence.v2", source: { head, tree }, artifact: { name: path.basename(files.artifact), sha256: sha256(artifactBytes) }, sbom: { name: path.basename(files.sbom), sha256: sha256(sbomBytes) }, provenance: { name: path.basename(files.provenance), sha256: sha256(provenanceBytes) }, configurationIdentities: identities(), signing: { trust: signingTrust, bundles: "PENDING_SIGSTORE_BINDING" }, rollback: decisions.rollback, databaseMigration: decisions.databaseMigration };
   writeFileSync(files.manifest, json(manifest));
   return manifest;
 }
+function bind(values) {
+  const { head, tree } = values;
+  revision(head, tree);
+  const expectedTrust = trust(values);
+  const files = names(head, path.resolve(values["output-dir"] ?? "release-evidence"));
+  const manifest = JSON.parse(readFileSync(files.manifest));
+  assert.deepEqual(manifest.source, { head, tree }, "manifest revision mismatch");
+  assert.deepEqual(manifest.signing.trust, expectedTrust, "manifest signing trust mismatch");
+  manifest.signing.bundles = { artifact: bundleRecord(files.bundles.artifact), sbom: bundleRecord(files.bundles.sbom), provenance: bundleRecord(files.bundles.provenance) };
+  writeFileSync(files.manifest, json(manifest));
+  return manifest;
+}
+function cosignVerify(cosign, subject, bundle, expectedTrust) {
+  execFileSync(cosign, ["verify-blob", "--bundle", bundle, "--certificate-identity", expectedTrust.certificateIdentity, "--certificate-oidc-issuer", expectedTrust.oidcIssuer, subject], { cwd: ROOT, encoding: "utf8", stdio: "pipe" });
+}
 function verifyEvidence(values) {
   const { head, tree } = values; revision(head, tree);
+  const expectedTrust = trust(values);
   const files = names(head, path.resolve(values["output-dir"] ?? "release-evidence"));
   const manifest = JSON.parse(readFileSync(files.manifest)); const artifactBytes = readFileSync(files.artifact); const sbomBytes = readFileSync(files.sbom); const provenanceBytes = readFileSync(files.provenance);
   assert.deepEqual(manifest.source, { head, tree }, "manifest revision mismatch");
+  assert.deepEqual(manifest.signing.trust, expectedTrust, "manifest signing trust mismatch");
   assert.equal(sha256(artifactBytes), manifest.artifact.sha256, "artifact digest mismatch"); assert.equal(sha256(sbomBytes), manifest.sbom.sha256, "SBOM digest mismatch"); assert.equal(sha256(provenanceBytes), manifest.provenance.sha256, "provenance digest mismatch"); assert.deepEqual(manifest.configurationIdentities, identities(), "configuration identity mismatch");
-  const statement = JSON.parse(provenanceBytes); assert.equal(statement.predicate.buildDefinition.externalParameters.source.head, head, "provenance head mismatch"); assert.equal(statement.predicate.buildDefinition.externalParameters.source.tree, tree, "provenance tree mismatch"); assert.equal(statement.subject[0].digest.sha256, sha256(artifactBytes), "provenance artifact mismatch"); assert.equal(statement.subject[1].digest.sha256, sha256(sbomBytes), "provenance SBOM mismatch");
-  const signature = JSON.parse(readFileSync(files.signature)); assert.equal(signature.algorithm, "Ed25519", "signature algorithm mismatch"); assert.equal(signature.payloadSha256, sha256(provenanceBytes), "signed payload mismatch"); assert.equal(verify(null, provenanceBytes, readFileSync(files.publicKey), Buffer.from(signature.signature, "base64")), true, "provenance signature mismatch");
+  const statement = JSON.parse(provenanceBytes); assert.equal(statement.predicate.buildDefinition.externalParameters.source.head, head, "provenance head mismatch"); assert.equal(statement.predicate.buildDefinition.externalParameters.source.tree, tree, "provenance tree mismatch"); assert.deepEqual(statement.predicate.buildDefinition.internalParameters.signingTrust, expectedTrust, "provenance signing trust mismatch"); assert.equal(statement.subject[0].digest.sha256, sha256(artifactBytes), "provenance artifact mismatch"); assert.equal(statement.subject[1].digest.sha256, sha256(sbomBytes), "provenance SBOM mismatch");
+  for (const kind of ["artifact", "sbom", "provenance"]) assert.deepEqual(manifest.signing.bundles[kind], bundleRecord(files.bundles[kind]), `${kind} signature bundle mismatch`);
+  assert.ok(values.cosign, "independent cosign verifier required");
+  cosignVerify(values.cosign, files.artifact, files.bundles.artifact, expectedTrust);
+  cosignVerify(values.cosign, files.sbom, files.bundles.sbom, expectedTrust);
+  cosignVerify(values.cosign, files.provenance, files.bundles.provenance, expectedTrust);
+  cosignVerify(values.cosign, files.manifest, files.bundles.manifest, expectedTrust);
   return manifest;
 }
 const parsed = args(process.argv.slice(2));
-process.stdout.write(`${JSON.stringify(parsed.mode === "build" ? build(parsed.values) : verifyEvidence(parsed.values))}\n`);
+const result = parsed.mode === "build" ? build(parsed.values) : parsed.mode === "bind" ? bind(parsed.values) : verifyEvidence(parsed.values);
+process.stdout.write(`${JSON.stringify(result)}\n`);
