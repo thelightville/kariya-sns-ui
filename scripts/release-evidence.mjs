@@ -116,10 +116,13 @@ function names(head, output) {
 function bundleRecord(file) {
   const bytes = readFileSync(file);
   const bundle = JSON.parse(bytes);
-  const entries = bundle.verificationMaterial?.tlogEntries ?? [];
-  assert.ok(entries.length > 0, `Sigstore bundle has no Rekor entry: ${path.basename(file)}`);
-  const rekorLogIndexes = entries.map((entry) => String(entry.logIndex ?? "")).filter(Boolean).sort();
-  assert.equal(rekorLogIndexes.length, entries.length, "Sigstore bundle missing Rekor log index");
+  const modernEntries = bundle.verificationMaterial?.tlogEntries ?? [];
+  const legacyIndex = bundle.rekorBundle?.Payload?.logIndex ?? bundle.rekorBundle?.payload?.logIndex;
+  const rekorLogIndexes = modernEntries.map((entry) => String(entry.logIndex ?? "")).filter(Boolean);
+  if (legacyIndex !== undefined && legacyIndex !== null) rekorLogIndexes.push(String(legacyIndex));
+  rekorLogIndexes.sort();
+  assert.ok(rekorLogIndexes.length > 0, `Sigstore bundle has no Rekor entry: ${path.basename(file)}`);
+  if (modernEntries.length > 0) assert.equal(rekorLogIndexes.length, modernEntries.length, "Sigstore bundle missing Rekor log index");
   return { name: path.basename(file), sha256: sha256(bytes), rekorLogIndexes };
 }
 function build(values) {
