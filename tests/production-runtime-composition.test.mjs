@@ -8,8 +8,12 @@ import {
 import { assertAuthSchemaHead } from "../src/server/auth/nodePostgresPool.mjs";
 import {
   certificateValidityWindow,
+  certificateDerProfile,
   createCloudMtlsClient,
   parseCloudResponse,
+  validateLeafCertificateProfile,
+  validateReplacementTrustAnchor,
+  validateReplacementTrustAnchorCertificate,
   validateCloudServerIdentity,
 } from "../src/server/auth/cloudMtlsClient.mjs";
 import { selectAuthRuntime } from "../src/server/auth/runtimeComposition.mjs";
@@ -36,7 +40,6 @@ function environment(region = "ng") {
     K_SNS_CLOUD_CLIENT_CERT_PATH: "/run/ksns/client.crt",
     K_SNS_CLOUD_CLIENT_KEY_PATH: "/run/ksns/client.key",
     K_SNS_CLOUD_CA_BUNDLE_PATH: "/run/ksns/cloud-ca.pem",
-    K_SNS_CLOUD_CRL_PATH: "/run/ksns/cloud.crl",
   };
 }
 
@@ -98,11 +101,58 @@ test("certificate validity supports Node 20 strings and fails closed on malforme
   }
 });
 
+test("DER profile parser binds basic constraints, key usage, and SHA-256 signature", () => {
+  const tlv = (tag, ...parts) => {
+    const body = Buffer.concat(parts);
+    assert.ok(body.length < 128);
+    return Buffer.concat([Buffer.from([tag, body.length]), body]);
+  };
+  const oid = {
+    signature: Buffer.from("06082a8648ce3d040302", "hex"),
+    basic: Buffer.from("0603551d13", "hex"),
+    usage: Buffer.from("0603551d0f", "hex"),
+  };
+  const certificate = (basic, usage) => {
+    const extensions = tlv(
+      0x30,
+      tlv(0x30, oid.basic, tlv(0x04, basic)),
+      tlv(0x30, oid.usage, tlv(0x04, usage))
+    );
+    const tbs = tlv(0x30, tlv(0xa3, extensions));
+    return tlv(0x30, tbs, tlv(0x30, oid.signature), tlv(0x03, Buffer.from([0])));
+  };
+
+  assert.deepEqual(
+    certificateDerProfile(
+      certificate(Buffer.from("3000", "hex"), Buffer.from("03020780", "hex"))
+    ),
+    {
+      signatureOid: "1.2.840.10045.4.3.2",
+      basic: [],
+      keyUsage: "0780",
+    }
+  );
+  assert.deepEqual(
+    certificateDerProfile(
+      certificate(
+        Buffer.from("30060101ff020100", "hex"),
+        Buffer.from("03020204", "hex")
+      )
+    ),
+    {
+      signatureOid: "1.2.840.10045.4.3.2",
+      basic: ["0101ff", "020100"],
+      keyUsage: "0204",
+    }
+  );
+  assert.throws(() => certificateDerProfile(Buffer.from("3000", "hex")), /unavailable/);
+});
 test("dedicated server certificate identity rejects wrong or additional SANs", () => {
   const ok = validateCloudServerIdentity(
     "cloud-auth.ng.internal.kariya",
     { subjectaltname: "DNS:cloud-auth.ng.internal.kariya" },
     "cloud-auth.ng.internal.kariya",
+    () => undefined,
     () => undefined
   );
   assert.equal(ok, undefined);
@@ -116,12 +166,142 @@ test("dedicated server certificate identity rejects wrong or additional SANs", (
         hostname,
         { subjectaltname },
         "cloud-auth.ng.internal.kariya",
+        () => undefined,
         () => undefined
       ) instanceof Error
     );
   }
 });
 
+test("replacement CA and 24-hour leaf profiles fail closed on contract drift", () => {
+  const now = Date.parse("2026-08-01T00:00:00Z");
+  const p256 = {
+    asymmetricKeyType: "ec",
+    asymmetricKeyDetails: { namedCurve: "prime256v1" },
+  };
+  const leafDer = {
+    signatureOid: "1.2.840.10045.4.3.2",
+    basic: [],
+    keyUsage: "0780",
+  };
+  const leaf = (overrides = {}) => ({
+    ca: false,
+    subject: "",
+    subjectAltName: "URI:spiffe://kariya/services/ksns/ng",
+    publicKey: p256,
+    keyUsage: ["1.3.6.1.5.5.7.3.2"],
+    validFromDate: new Date(now - 1_000),
+    validToDate: new Date(now + 86_399_000),
+    ...overrides,
+  });
+
+  validateLeafCertificateProfile(leaf(), {
+    identity: "spiffe://kariya/services/ksns/ng",
+    client: true,
+    now,
+    derProfile: leafDer,
+  });
+  validateLeafCertificateProfile(
+    leaf({
+      subjectAltName: "DNS:cloud-auth.ng.internal.kariya",
+      keyUsage: ["1.3.6.1.5.5.7.3.1"],
+    }),
+    {
+      identity: "cloud-auth.ng.internal.kariya",
+      client: false,
+      now,
+      derProfile: leafDer,
+    }
+  );
+
+  const rejectedLeaves = [
+    [leaf({ validToDate: new Date(now) }), "spiffe://kariya/services/ksns/ng", leafDer],
+    [leaf({ validFromDate: new Date(now + 1) }), "spiffe://kariya/services/ksns/ng", leafDer],
+    [
+      leaf({
+        validFromDate: new Date(now - 1_000),
+        validToDate: new Date(now + 86_400_001),
+      }),
+      "spiffe://kariya/services/ksns/ng",
+      leafDer,
+    ],
+    [leaf(), "spiffe://kariya/services/ksns/ca", leafDer],
+    [leaf({ keyUsage: ["1.3.6.1.5.5.7.3.1"] }), "spiffe://kariya/services/ksns/ng", leafDer],
+    [leaf({ subject: "CN=legacy" }), "spiffe://kariya/services/ksns/ng", leafDer],
+    [leaf({ publicKey: { asymmetricKeyType: "rsa" } }), "spiffe://kariya/services/ksns/ng", leafDer],
+    [leaf(), "spiffe://kariya/services/ksns/ng", { ...leafDer, keyUsage: "0781" }],
+    [leaf(), "spiffe://kariya/services/ksns/ng", { ...leafDer, basic: ["010100"] }],
+    [leaf(), "spiffe://kariya/services/ksns/ng", { ...leafDer, signatureOid: "1.2.840.113549.1.1.11" }],
+  ];
+  for (const [parsed, identity, derProfile] of rejectedLeaves) {
+    assert.throws(
+      () =>
+        validateLeafCertificateProfile(parsed, {
+          identity,
+          client: true,
+          now,
+          derProfile,
+        }),
+      /unavailable/
+    );
+  }
+
+  const caDer = {
+    signatureOid: "1.2.840.10045.4.3.2",
+    basic: ["0101ff", "020100"],
+    keyUsage: "0204",
+  };
+  const anchor = (overrides = {}) => ({
+    ca: true,
+    subject: "O=Kariya,CN=Durable Exchange Replacement CA",
+    issuer: "O=Kariya,CN=Durable Exchange Replacement CA",
+    publicKey: p256,
+    validFromDate: new Date(now - 1_000),
+    validToDate: new Date(now + 86_399_000),
+    verify: () => true,
+    ...overrides,
+  });
+  validateReplacementTrustAnchorCertificate(anchor(), { now, derProfile: caDer });
+  for (const [parsed, derProfile] of [
+    [anchor({ verify: () => false }), caDer],
+    [anchor({ validToDate: new Date(now) }), caDer],
+    [anchor({ validFromDate: new Date(now + 1) }), caDer],
+    [anchor({ issuer: "CN=Legacy CA" }), caDer],
+    [anchor(), { ...caDer, basic: ["0101ff", "020101"] }],
+    [anchor(), { ...caDer, keyUsage: "0106" }],
+    [anchor(), { ...caDer, signatureOid: "1.2.840.113549.1.1.11" }],
+  ]) {
+    assert.throws(
+      () => validateReplacementTrustAnchorCertificate(parsed, { now, derProfile }),
+      /unavailable/
+    );
+  }
+});
+
+test("trust bundle accepts one replacement anchor and rejects absence, overlap, and malformed input", () => {
+  const pem = "-----BEGIN CERTIFICATE-----\nc3ludGhldGlj\n-----END CERTIFICATE-----";
+  let validated = 0;
+  const options = {
+    certificateFactory: () => Object.freeze({ profile: "replacement" }),
+    profileValidator(parsed) {
+      assert.equal(parsed.profile, "replacement");
+      validated += 1;
+    },
+  };
+  validateReplacementTrustAnchor(Buffer.from(pem), options);
+  assert.equal(validated, 1);
+  for (const value of [
+    "",
+    `${pem}\n${pem}`,
+    `legacy\n${pem}`,
+    "-----BEGIN CERTIFICATE-----\nmalformed",
+  ]) {
+    assert.throws(
+      () => validateReplacementTrustAnchor(Buffer.from(value), options),
+      /unavailable/
+    );
+  }
+});
 test("production selection is explicit and malformed protected config stays unavailable", async () => {
   let called = 0;
   const disabled = selectAuthRuntime({}, {

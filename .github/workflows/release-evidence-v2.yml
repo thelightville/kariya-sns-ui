@@ -1,0 +1,81 @@
+name: K-SNS UI release evidence v2
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-unsigned-evidence:
+    name: Build exact-head unsigned artifact, SBOM and provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      source_head: ${{ steps.evidence.outputs.source_head }}
+      source_tree: ${{ steps.evidence.outputs.source_tree }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: "${{ github.event.pull_request.head.sha }}"
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Build and validate exact source
+        env:
+          NEXT_PUBLIC_APP_DOMAIN: sns.kariya.ng
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          npm ci
+          npm run build
+          npm test
+          npm run lint
+      - name: Build deterministic unsigned release evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_HEAD=$(git rev-parse HEAD)
+          SOURCE_TREE=$(git show -s --format=%T HEAD)
+          OUTPUT="$RUNNER_TEMP/unsigned-evidence"
+          node scripts/release-evidence.mjs build \
+            --head "$SOURCE_HEAD" \
+            --tree "$SOURCE_TREE" \
+            --output-dir "$OUTPUT" \
+            --caller-repository "${{ github.repository }}" \
+            --caller-workflow-path ".github/workflows/release-evidence-v2.yml" \
+            --caller-ref "${{ github.ref }}" \
+            --caller-merge-sha "${{ github.sha }}"
+          {
+            echo "source_head=$SOURCE_HEAD"
+            echo "source_tree=$SOURCE_TREE"
+            echo "output=$OUTPUT"
+          } >> "$GITHUB_OUTPUT"
+      - name: Retain exact unsigned evidence for immutable signer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ksns-ui-unsigned-${{ steps.evidence.outputs.source_head }}
+          path: "${{ steps.evidence.outputs.output }}/"
+          if-no-files-found: error
+          retention-days: 30
+
+  sign-and-verify:
+    name: Sign through independently approved immutable trust root
+    needs: build-unsigned-evidence
+    permissions:
+      contents: read
+      id-token: write
+    uses: thelightville/kariya-governance/.github/workflows/reusable-release-signer.yml@2e88e23b745764009ed170400b922e0d98968a89
+    with:
+      caller_repository: thelightville/kariya-sns-ui
+      caller_workflow_path: .github/workflows/release-evidence-v2.yml
+      caller_ref: ${{ github.ref }}
+      caller_merge_sha: ${{ github.sha }}
+      source_head: ${{ needs.build-unsigned-evidence.outputs.source_head }}
+      source_tree: ${{ needs.build-unsigned-evidence.outputs.source_tree }}
+      reusable_workflow_sha: 2e88e23b745764009ed170400b922e0d98968a89
